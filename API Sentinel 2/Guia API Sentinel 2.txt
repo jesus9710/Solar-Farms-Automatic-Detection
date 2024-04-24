@@ -1,0 +1,46 @@
+
+1) Registrarse en https://dataspace.copernicus.eu/
+
+2) Hay que crear un archivo de texto llamado creds.txt con el siguiente formato:
+
+	user = <mi usuario de copernicus (correo electrónico)>
+	password = <mi contraseña de copernicus>
+
+Este archivo debe guardarse dentro de la carpeta API Sentinel 2 y añadirlo al .gitignore de la siguiente manera:
+
+# Sentinel API
+API Sentinel 2/creds.txt
+
+El .gitignore se puede descargar manualmente desde github, añadir manualmente estas dos líneas y guardar en la carpeta raíz del repositorio local
+
+De esta manera las contraseñas no las compartimos en github
+
+3) El archivo Ejemplo_API.py contiene un ejemplo básico y funciona de la siguiente manera:
+
+4) Con las líneas:
+
+	creds = get_credentials('creds.txt')
+	access_token = get_access_token(creds.user, creds.password)
+
+Obtenemos el objeto acces_token que se necesita para descargar las imágenes
+
+5) Una vez definido el rango de tiempo y el área de interés, se obtiene el objeto json y se transforma en dataframe.
+La columna ID del dataframe contiene los identificadores necesarios para descargar las imágenes.
+
+6) Con la función download_product() se descarga una única imagen.
+Con el parámetro dir puedes especificar la carpeta donde quieres que se descargue la imagen
+
+7) Con download_products() se pueden descargar varias imágenes.
+Si no se especifica nada en file_names, el nombre de los archivos se asignará automáticamente
+El parámetro Ids debe ser una lista con los Id
+
+8) El formato de las imágenes son jp2. Habría que investigar una manera de convertirlas a otro formato, o quizás el formato sirva para trabajar con python.
+
+9) El proceso de descarga es muy lento, ya que lo que descarga son "Granules" (que contiene todas las bandas espectrales).
+Esto es porque realmente no se ha usado la API. En el siguiente enlace se explica paso a paso cómo descargar las imágenes, con o sin la API:
+
+https://dataspace.copernicus.eu/news/2023-9-28-accessing-sentinel-mission-data-new-copernicus-data-space-ecosystem-apis
+
+Documentación de la API:
+
+https://sentinelhub-py.readthedocs.io/en/latest/index.html

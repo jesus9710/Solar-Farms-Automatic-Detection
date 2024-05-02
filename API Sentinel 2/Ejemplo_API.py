@@ -1,46 +1,99 @@
 #%% Librerías
 
-import requests
-import pandas as pd
-from functions import *
+import datetime as dt
+import matplotlib.pyplot as plt
+import numpy as np
+from sentinelhub import (CRS,
+                         BBox,
+                         DataCollection,
+                         SHConfig,
+                         DownloadRequest,
+                         MimeType,
+                         MosaickingOrder,
+                         SentinelHubDownloadClient,
+                         SentinelHubRequest,
+                         bbox_to_dimensions,
+)
 
-#%% Credenciales
+from sentinelhub import SentinelHubCatalog
+import os
+from utils import plot_image
 
-creds = get_credentials('creds.txt')
+# %% Logging
 
-#%% Token de acceso
+config = SHConfig("myprofile")
 
-access_token = get_access_token(creds.user, creds.password)
+#%% Parámetros
 
-# %% Área de interés
+aoi_coords_wgs84 = (46.16, -16.15, 46.51, -15.58)
+aoi_crs = CRS.WGS84
+resolution = 60
+time_interval = ("2020-06-12", "2020-06-13")
 
-start_date = "2022-06-01"
-end_date = "2022-06-02"
-data_collection = "SENTINEL-2"
-aoi = "POLYGON((4.220581 50.958859,4.521264 50.953236,4.545977 50.906064,4.541858 50.802029,4.489685 50.763825,4.23843 50.767734,4.192435 50.806369,4.189689 50.907363,4.220581 50.958859))'"
+aoi_bbox = BBox(bbox=aoi_coords_wgs84, crs=aoi_crs) # Bounding Box
+aoi_size = bbox_to_dimensions(aoi_bbox, resolution=resolution)
+print(f"Image shape at {resolution} m resolution: {aoi_size} pixels")
 
-# %% Requests
+#%% CATALOG API
 
-json = requests.get(f"https://catalogue.dataspace.copernicus.eu/odata/v1/Products?$filter=Collection/Name eq '{data_collection}' and OData.CSC.Intersects(area=geography'SRID=4326;{aoi}) and ContentDate/Start gt {start_date}T00:00:00.000Z and ContentDate/Start lt {end_date}T00:00:00.000Z").json()
+catalog = SentinelHubCatalog(config=config)
 
-# %% Dataframe
+aoi_bbox = BBox(bbox=aoi_coords_wgs84, crs=aoi_crs) # Bounding Box
+time_interval = time_interval
 
-json_df = pd.DataFrame.from_dict(json['value'])
-products = json_df.Id.to_list()
+search_iterator = catalog.search(
+    DataCollection.SENTINEL2_L2A,
+    bbox=aoi_bbox,
+    time=time_interval,
+    fields={"include": ["id", "properties.datetime"], "exclude": []},
 
-# %% Descarga de un producto
+)
 
-c_Id = products[0]
-c_filename = "product1"
+results = list(search_iterator)
+print("Total number of results:", len(results))
 
-# download_product(access_token = access_token, Id = c_Id, filename = c_filename)
+results
 
-# %% Descarga de varios productos
+#%% PROCESS API
 
-Ids = [products[0] ,products[1]]
+evalscript_true_color = """
+    //VERSION=3
 
-dir = 'C:/Jesús/5_Programacion/Local Scripts Python/TFM Kschool/Instalaciones fotovoltaicas/Token Creation/Prueba_2'
+    function setup() {
+        return {
+            input: [{
+                bands: ["B02", "B03", "B04"]
+            }],
+            output: {
+                bands: 3
+            }
+        };
+    }
 
-download_products(access_token = access_token, Ids = Ids, dir=dir)
+    function evaluatePixel(sample) {
+        return [sample.B04, sample.B03, sample.B02];
+    }
+"""
 
-# %%
+request_true_color = SentinelHubRequest(
+    evalscript=evalscript_true_color,
+    input_data=[
+        SentinelHubRequest.input_data(
+            data_collection=DataCollection.SENTINEL2_L2A.define_from(
+                name="s2l2a", service_url="https://sh.dataspace.copernicus.eu"
+            ),
+            time_interval=time_interval,
+            other_args={"dataFilter": {"mosaickingOrder": "leastCC"}},
+        )
+    ],
+    responses=[SentinelHubRequest.output_response("default", MimeType.PNG)],
+    bbox=aoi_bbox,
+    size=aoi_size,
+    config=config,
+)
+
+#%% Request
+data_with_cloud_mask = request_true_color.get_data()
+
+#%% Plotting
+plot_image(request_true_color.get_data()[0], factor=3.5 / 255, clip_range=(0, 1))

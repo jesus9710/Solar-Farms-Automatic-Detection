@@ -9,7 +9,7 @@
 Este archivo debe guardarse dentro de la carpeta API Sentinel 2 y añadirlo al .gitignore de la siguiente manera:
 
 # Sentinel API
-API Sentinel 2/creds.txt
+API Sentinel 2/OData/creds.txt
 
 El .gitignore se puede descargar manualmente desde github, añadir manualmente estas dos líneas y guardar en la carpeta raíz del repositorio local
 

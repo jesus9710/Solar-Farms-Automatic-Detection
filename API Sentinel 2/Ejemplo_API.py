@@ -93,7 +93,9 @@ request_true_color = SentinelHubRequest(
 )
 
 #%% Request
-data_with_cloud_mask = request_true_color.get_data()
+data_full_color = request_true_color.get_data()
 
 #%% Plotting
-plot_image(request_true_color.get_data()[0], factor=3.5 / 255, clip_range=(0, 1))
+plot_image(data_full_color[0], factor=3.5 / 255, clip_range=(0, 1))
+
+# %%

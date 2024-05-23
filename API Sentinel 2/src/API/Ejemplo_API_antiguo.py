@@ -25,10 +25,10 @@ config = SHConfig("myprofile")
 
 #%% Parámetros
 
-aoi_coords_wgs84 = (46.16, -16.15, 46.51, -15.58)
+aoi_coords_wgs84 = (-6.542358, 36.173067, -5.462952, 36.969804)
 aoi_crs = CRS.WGS84
 resolution = 60
-time_interval = ("2020-06-12", "2020-06-13")
+time_interval = ("2021-06-12", "2021-06-13")
 
 aoi_bbox = BBox(bbox=aoi_coords_wgs84, crs=aoi_crs) # Bounding Box
 aoi_size = bbox_to_dimensions(aoi_bbox, resolution=resolution)

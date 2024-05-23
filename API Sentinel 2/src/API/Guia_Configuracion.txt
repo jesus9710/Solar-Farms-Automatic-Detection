@@ -23,25 +23,6 @@ El formato será el siguiente:
 	sh_base_url = 'https://sh.dataspace.copernicus.eu'
 	sh_token_url = 'https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token'
 
-5) Ya estaría todo listo para usar la API. En el script Ejemplo_API se muestra una consulta a catálogo y descarga de una imagen. El código está organizado por partes:
-
-	Logging:
-
-	En este bloque se carga el perfil que hemos configurado
-
-	Parámetros:
-
-	Aquí se especifican los parámetros: coordenadas del área de interés, sistema de coordenadas, resolución e intervalo de tiempo.
-
-	Catalog API:
-
-	En este bloque se realiza una consulta al catálogo
-
-	Process API:
-
-	En este bloque se lleva a cabo el request de la imagen y su representación gráfica. La variable evalscript_true_color consiste en un script en el que se especifican las bandas.
-	En este caso, se usan las bandas B02, B03 y B04 (RGB)
-
 Fuentes:
 
 Documentación API: https://sentinelhub-py.readthedocs.io/en/latest/index.html

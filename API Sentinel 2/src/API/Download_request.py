@@ -8,12 +8,16 @@ import geopandas as gpd
 
 config = SHConfig("myprofile")
 
-#%% Parámetros
+#%% Geometría
+
 adm_lim_badajoz_raw = gpd.read_file('../../data/Badajoz.geojson').to_crs(epsg=32629)
 adm_lim_badajoz = geometry.Geometry(adm_lim_badajoz_raw.geometry[0],adm_lim_badajoz_raw.crs)
-aoi_crs = "https://www.opengis.net/def/crs/EPSG/0/25829"
-time_interval = ("2016-11-1", "2016-12-31")
+
+#%% Parámetros
+
+time_interval = ("2016-11-30", "2016-12-31")
 max_cloud_coverage = 1.0
+resolution = (100,100)
 
 #%% CATALOG API
 
@@ -54,8 +58,8 @@ evalscript_true_color = """
 """
 
 request_true_color = SentinelHubRequest(
-    evalscript=evalscript_true_color,
-    input_data=[
+    evalscript = evalscript_true_color,
+    input_data = [
         SentinelHubRequest.input_data(
             data_collection=DataCollection.SENTINEL2_L2A.define_from(
                 name="s2l2a", service_url="https://sh.dataspace.copernicus.eu"
@@ -65,9 +69,10 @@ request_true_color = SentinelHubRequest(
             mosaicking_order=MosaickingOrder.LEAST_CC
         )
     ],
-    responses=[SentinelHubRequest.output_response("default", MimeType.PNG)],
-    geometry= adm_lim_badajoz,
-    config=config,
+    responses = [SentinelHubRequest.output_response("default", MimeType.TIFF)],
+    geometry = adm_lim_badajoz,
+    resolution = resolution,
+    config = config,
 )
 
 #%% Request

@@ -12,19 +12,19 @@ config = SHConfig("myprofile")
 
 adm_lim_badajoz_raw = gpd.read_file('../../data/Badajoz.geojson').to_crs(epsg=32629) # Cambio a EPSG32629 (WGS 84 / UTM zone 29N) https://epsg.io/32629
 adm_lim_badajoz = geometry.Geometry(adm_lim_badajoz_raw.geometry[0],adm_lim_badajoz_raw.crs) # Geometría de badajoz
-adm_lim_badajoz_split = BBoxSplitter(adm_lim_badajoz_raw.geometry, adm_lim_badajoz_raw.crs,(2,1)) # Geometría separada en diferentes BBox
+adm_lim_badajoz_split = BBoxSplitter(adm_lim_badajoz_raw.geometry, adm_lim_badajoz_raw.crs,(15,15)) # Geometría separada en diferentes BBox
 
 #%% Comprobar box splitter
 
 adm_lim_badajoz_raw_4326 = gpd.read_file('../../data/Badajoz.geojson').to_crs(epsg=4326) # La función show_splitter no admite EPSG 32629, por lo que se hace el cambio a EPSG4326
-adm_lim_badajoz_split_4326 = BBoxSplitter(adm_lim_badajoz_raw_4326.geometry, adm_lim_badajoz_raw_4326.crs,(2,1),reduce_bbox_sizes=False)
+adm_lim_badajoz_split_4326 = BBoxSplitter(adm_lim_badajoz_raw_4326.geometry, adm_lim_badajoz_raw_4326.crs,(15,15),reduce_bbox_sizes=True)
 show_splitter(adm_lim_badajoz_split_4326) 
 
 #%% Parámetros
 
 time_interval = ("2016-11-30", "2016-12-31")
 max_cloud_coverage = 1.0
-resolution= (70,70)
+resolution= (10,10)
 
 #%% CATALOG API
 
@@ -94,7 +94,7 @@ evalscript=evalscript,
 '''
 #%% Obtener un preview
 
-get_preview = True
+get_preview = False
 
 if get_preview:
     data_full_color = []
@@ -110,7 +110,7 @@ data_full_color = SentinelHubDownloadClient(config=config).download(dl_requests,
 #%% Merge
 
 file_name = 'merged_rasted.tiff'
-save_file = False # Flag de seguridad para evitar sobreescribir imágenes
+save_file = True # Flag de seguridad para evitar sobreescribir imágenes
 
 if save_file:
     tiffs = get_product_path(sh_requests)

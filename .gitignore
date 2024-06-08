@@ -163,3 +163,4 @@ cython_debug/
 **/creds.txt
 *.tiff
 SIOSE AR/merging and uses extraction.ipynb
+*.png

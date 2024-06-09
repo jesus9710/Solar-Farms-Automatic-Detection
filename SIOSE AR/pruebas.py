@@ -77,4 +77,7 @@ En lugar de:
 De todas formas, Laura tiene las geometrías.
 
 '''
+
 # %%
+
+print('prueba')

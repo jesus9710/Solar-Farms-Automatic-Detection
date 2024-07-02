@@ -24,8 +24,8 @@ class Dataset(torch.utils.data.Dataset):
         self.image_dir = image_dir
         self.mask_dir = mask_dir
         self.transform = transform
-        self.images = os.listdir(image_dir) # Lista de archivos de imagen
-        self.masks = os.listdir(mask_dir) # Lista de archivos de máscara
+        self.images = list(image_dir.glob('*.png')) # Lista de archivos de imagen
+        self.masks = list(mask_dir.glob('*.png')) # Lista de archivos de máscara
 
     def __len__(self):
 
@@ -56,13 +56,13 @@ for param in model.backbone.parameters():
 
 criterion = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters())
-batch_size = 100
-epochs = 5
+batch_size = 20
+epochs = 1
 
 TRANSFORM = transforms.ToTensor()
 
 dataset = Dataset(IMAGE_DIR, MASK_DIR, TRANSFORM)
-dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,shuffle=True)
+dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 for e in range(1, epochs+1):
     print(f"epoch: {e}/{epochs}")

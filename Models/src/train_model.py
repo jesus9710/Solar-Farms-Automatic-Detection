@@ -5,8 +5,9 @@ import torch
 import torchvision.transforms as transforms
 
 from PIL import Image as PIM
-import os
 from pathlib import Path
+
+from utils import *
 
 weights_manager = satlaspretrain_models.Weights()
 device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
@@ -15,33 +16,6 @@ device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
 
 IMAGE_DIR = Path.cwd().parent.joinpath('data/features')
 MASK_DIR = Path.cwd().parent.joinpath('data/labels')
-
-# %% Dataset:
-
-class Dataset(torch.utils.data.Dataset):
-    def __init__(self, image_dir, mask_dir, transform):
-
-        self.image_dir = image_dir
-        self.mask_dir = mask_dir
-        self.transform = transform
-        self.images = list(image_dir.glob('*.png')) # Lista de archivos de imagen
-        self.masks = list(mask_dir.glob('*.png')) # Lista de archivos de máscara
-
-    def __len__(self):
-
-        return len(self.images)
-
-    def __getitem__(self, ix):
-
-        img_path = self.image_dir.joinpath(self.images[ix]) # Archivo de imagen ix
-        mask_path = self.mask_dir.joinpath(self.masks[ix]) # Archivo de máscara ix
-
-        image = PIM.open(img_path).convert("RGB")
-        mask = PIM.open(mask_path)
-
-        image, mask = self.transform(image).to(device).float(), self.transform(mask).squeeze().to(device).long() # Formato para entrenamiento
-
-        return image, mask
 
 # %% Model
 
@@ -52,13 +26,24 @@ model = model.to(device)
 for param in model.backbone.parameters():
     param.requires_grad = False
 
+# %% Criterion
+
+Focal_Loss = True
+
+if Focal_Loss:
+
+    class_weights = calculate_weights_FLoss (MASK_DIR, 6, 512)
+    criterion = FocalLoss(alpha= class_weights, gamma=2)
+
+else:
+    criterion = torch.nn.CrossEntropyLoss()
+
 # %% Train
 
-criterion = torch.nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters())
-batch_size = 20
+batch_size = 10
 epochs = 1
 
+optimizer = torch.optim.Adam(model.parameters())
 TRANSFORM = transforms.ToTensor()
 
 dataset = Dataset(IMAGE_DIR, MASK_DIR, TRANSFORM)

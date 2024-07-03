@@ -10,6 +10,7 @@ from utils import *
 
 weights_manager = satlaspretrain_models.Weights()
 device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
+device_str = "cuda" if torch.cuda.is_available() else "cpu"
 
 # %% Paths:
 
@@ -22,7 +23,7 @@ model = weights_manager.get_pretrained_model(
     model_identifier = "Sentinel2_SwinT_SI_RGB",
     fpn = True, head = satlaspretrain_models.Head.SEGMENT,
     num_categories = 6, 
-    device = 'cpu')
+    device = device_str)
 
 model = model.to(device)
 

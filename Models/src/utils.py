@@ -4,8 +4,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from PIL import Image as PIM
 
-device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
-
 class Dataset(torch.utils.data.Dataset):
     """
     Clase Dataset para entrenamiento del modelo de segmentación
@@ -17,13 +15,14 @@ class Dataset(torch.utils.data.Dataset):
 
     """
 
-    def __init__(self, image_dir, mask_dir, transform):
+    def __init__(self, image_dir, mask_dir, transform, device):
 
         self.image_dir = image_dir
         self.mask_dir = mask_dir
         self.transform = transform
         self.images = list(image_dir.glob('*.png')) # Lista de archivos de imagen
         self.masks = list(mask_dir.glob('*.png')) # Lista de archivos de máscara
+        self.device = device
 
     def __len__(self):
 
@@ -37,7 +36,7 @@ class Dataset(torch.utils.data.Dataset):
         image = PIM.open(img_path).convert("RGB")
         mask = PIM.open(mask_path)
 
-        image, mask = self.transform(image).to(device).float(), self.transform(mask).squeeze().to(device).long() # Formato para entrenamiento
+        image, mask = self.transform(image).to(self.device).float(), self.transform(mask).squeeze().to(self.device).long() # Formato para entrenamiento
 
         return image, mask
 
@@ -66,7 +65,7 @@ class FocalLoss(nn.Module):
         loss = (self.alpha[targets] * (1 - pt) ** self.gamma * ce_loss).mean()
         return loss
 
-def calculate_weights_FLoss (mask_path, n_classes, n_dim):
+def calculate_weights_FLoss (mask_path, n_classes, n_dim, device):
     """
     Función para calcular los pesos necesarios para la función de pérdida focal
 
@@ -81,10 +80,7 @@ def calculate_weights_FLoss (mask_path, n_classes, n_dim):
 
     mask_files = list(mask_path.glob('*.png'))
     px_count = np.zeros(n_classes)
-
-    total_samples = 1
-    for i in (len(mask_files), n_dim, n_dim):
-        total_samples *= i
+    total_samples = len(mask_files) * (n_dim ** 2)
 
     for file in mask_files:
         mask = np.array(PIM.open(file))

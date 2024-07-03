@@ -4,7 +4,6 @@ import satlaspretrain_models
 import torch
 import torchvision.transforms as transforms
 
-from PIL import Image as PIM
 from pathlib import Path
 
 from utils import *
@@ -19,7 +18,11 @@ MASK_DIR = Path.cwd().parent.joinpath('data/labels')
 
 # %% Model
 
-model = weights_manager.get_pretrained_model(model_identifier="Sentinel2_SwinT_SI_RGB", fpn=True, head = satlaspretrain_models.Head.SEGMENT, num_categories=6)
+model = weights_manager.get_pretrained_model(model_identifier = "Sentinel2_SwinT_SI_RGB",
+                                             fpn = True, head = satlaspretrain_models.Head.SEGMENT,
+                                             num_categories = 6,
+                                             device = device)
+
 model = model.to(device)
 
 # Congelar pesos del backbone
@@ -32,7 +35,7 @@ Focal_Loss = True
 
 if Focal_Loss:
 
-    class_weights = calculate_weights_FLoss (MASK_DIR, 6, 512)
+    class_weights = calculate_weights_FLoss (MASK_DIR, 6, 512, device)
     criterion = FocalLoss(alpha= class_weights, gamma=2)
 
 else:
@@ -46,7 +49,7 @@ epochs = 1
 optimizer = torch.optim.Adam(model.parameters())
 TRANSFORM = transforms.ToTensor()
 
-dataset = Dataset(IMAGE_DIR, MASK_DIR, TRANSFORM)
+dataset = Dataset(IMAGE_DIR, MASK_DIR, TRANSFORM, device)
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 for e in range(1, epochs+1):

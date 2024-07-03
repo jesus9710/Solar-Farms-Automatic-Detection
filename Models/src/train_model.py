@@ -18,10 +18,11 @@ MASK_DIR = Path.cwd().parent.joinpath('data/labels')
 
 # %% Model
 
-model = weights_manager.get_pretrained_model(model_identifier = "Sentinel2_SwinT_SI_RGB",
-                                             fpn = True, head = satlaspretrain_models.Head.SEGMENT,
-                                             num_categories = 6,
-                                             device = device)
+model = weights_manager.get_pretrained_model(
+    model_identifier = "Sentinel2_SwinT_SI_RGB",
+    fpn = True, head = satlaspretrain_models.Head.SEGMENT,
+    num_categories = 6, 
+    device = 'cpu')
 
 model = model.to(device)
 
@@ -50,7 +51,7 @@ optimizer = torch.optim.Adam(model.parameters())
 TRANSFORM = transforms.ToTensor()
 
 dataset = Dataset(IMAGE_DIR, MASK_DIR, TRANSFORM, device)
-dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
+dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
 for e in range(1, epochs+1):
     print(f"epoch: {e}/{epochs}")
@@ -64,3 +65,4 @@ for e in range(1, epochs+1):
         print(f"loss: {loss:.4f} [{current:>5d}/{len(dataset):>5d}]")
 
 # %%
+print('fin')

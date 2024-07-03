@@ -4,13 +4,13 @@ import satlaspretrain_models
 import torch
 import torchvision.transforms as transforms
 
-from PIL import Image as PIM
 from pathlib import Path
 
 from utils import *
 
 weights_manager = satlaspretrain_models.Weights()
 device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
+device_str = "cuda" if torch.cuda.is_available() else "cpu"
 
 # %% Paths:
 
@@ -19,7 +19,12 @@ MASK_DIR = Path.cwd().parent.joinpath('data/labels')
 
 # %% Model
 
-model = weights_manager.get_pretrained_model(model_identifier="Sentinel2_SwinT_SI_RGB", fpn=True, head = satlaspretrain_models.Head.SEGMENT, num_categories=6)
+model = weights_manager.get_pretrained_model(
+    model_identifier = "Sentinel2_SwinT_SI_RGB",
+    fpn = True, head = satlaspretrain_models.Head.SEGMENT,
+    num_categories = 6, 
+    device = device_str)
+
 model = model.to(device)
 
 # Congelar pesos del backbone
@@ -32,7 +37,7 @@ Focal_Loss = True
 
 if Focal_Loss:
 
-    class_weights = calculate_weights_FLoss (MASK_DIR, 6, 512)
+    class_weights = calculate_weights_FLoss (MASK_DIR, 6, 512, device)
     criterion = FocalLoss(alpha= class_weights, gamma=2)
 
 else:
@@ -46,8 +51,8 @@ epochs = 1
 optimizer = torch.optim.Adam(model.parameters())
 TRANSFORM = transforms.ToTensor()
 
-dataset = Dataset(IMAGE_DIR, MASK_DIR, TRANSFORM)
-dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
+dataset = Dataset(IMAGE_DIR, MASK_DIR, TRANSFORM, device)
+dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
 for e in range(1, epochs+1):
     print(f"epoch: {e}/{epochs}")
@@ -61,3 +66,4 @@ for e in range(1, epochs+1):
         print(f"loss: {loss:.4f} [{current:>5d}/{len(dataset):>5d}]")
 
 # %%
+print('fin')

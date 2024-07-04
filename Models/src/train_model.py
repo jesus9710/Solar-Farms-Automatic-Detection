@@ -9,8 +9,8 @@ from pathlib import Path
 from utils import *
 
 weights_manager = satlaspretrain_models.Weights()
-device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
 device_str = "cuda" if torch.cuda.is_available() else "cpu"
+device = torch.device(device_str)
 
 # %% Paths:
 IMAGE_DIR = Path.cwd().parent.joinpath('data/features')
@@ -18,10 +18,11 @@ MASK_DIR = Path.cwd().parent.joinpath('data/labels')
 
 # %% Model
 model = weights_manager.get_pretrained_model(
-    model_identifier="Sentinel2_SwinT_SI_RGB",
-    fpn=True, head=satlaspretrain_models.Head.SEGMENT, 
-    num_categories=6,
-    device=device_str)
+    model_identifier = "Sentinel2_SwinT_SI_RGB",
+    fpn = True,
+    head = satlaspretrain_models.Head.SEGMENT,
+    num_categories = 6, 
+    device = device_str)
 
 model = model.to(device)
 
@@ -30,12 +31,15 @@ for param in model.backbone.parameters():
     param.requires_grad = False
 
 # %% Criterion
-Focal_Loss = False
+criterion_type = 'Dice' # Seleccionar entre 'Dice', 'Focal' o 'CE'
 
-if Focal_Loss:
-    class_weights = calculate_weights_FLoss(MASK_DIR, 6, 512, device)
-    criterion = FocalLoss(alpha=class_weights, gamma=2)
-else:
+if criterion_type == 'Dice':
+    criterion = GenDiceLoss(eps = 10, device=device)
+
+elif criterion_type == 'Focal':
+    criterion = FocalLoss(gamma = 1)
+
+elif criterion_type == 'CE':
     criterion = torch.nn.CrossEntropyLoss()
 
 transform = transforms.Compose([
@@ -64,31 +68,8 @@ for epoch in range(epochs):
         loss = criterion(outputs, masks.long())
         loss.backward()
         optimizer.step()
-        if (batch_ix + 1) % 10 == 0:
-            print(f"Batch {batch_ix + 1}/{len(train_dataloader)}, Loss: {loss.item():.4f}")
 
-# # %% Evaluate
-# model.eval()
-# all_preds = []
-# all_labels = []
-
-# with torch.no_grad():
-#     for images, masks in test_dataloader:
-#         outputs = model(images)[0]
-#         preds = torch.argmax(outputs, dim=1)
-#         all_preds.append(preds.cpu().numpy().flatten())
-#         all_labels.append(masks.cpu().numpy().flatten())
-
-# all_preds = np.concatenate(all_preds)
-# all_labels = np.concatenate(all_labels)
-
-# # %% Confusion Matrix
-# from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
-# import matplotlib.pyplot as plt
-
-# conf_matrix = confusion_matrix(all_labels, all_preds, labels=[0, 1, 2, 3, 4, 5])
-# disp = ConfusionMatrixDisplay(confusion_matrix=conf_matrix, display_labels=[0, 1, 2, 3, 4, 5])
-# disp.plot(cmap=plt.cm.Blues)
-# plt.show()
+        loss, current = loss.item(), (batch_ix + 1) * len(x)
+        print(f"loss ({criterion_type}): {loss:.4f} [{current:>5d}/{len(dataset):>5d}]")
 
 print('Fin modelo actual desarrollado ')

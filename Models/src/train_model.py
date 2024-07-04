@@ -9,8 +9,8 @@ from pathlib import Path
 from utils import *
 
 weights_manager = satlaspretrain_models.Weights()
-device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
 device_str = "cuda" if torch.cuda.is_available() else "cpu"
+device = torch.device(device_str)
 
 # %% Paths:
 
@@ -21,7 +21,8 @@ MASK_DIR = Path.cwd().parent.joinpath('data/labels')
 
 model = weights_manager.get_pretrained_model(
     model_identifier = "Sentinel2_SwinT_SI_RGB",
-    fpn = True, head = satlaspretrain_models.Head.SEGMENT,
+    fpn = True,
+    head = satlaspretrain_models.Head.SEGMENT,
     num_categories = 6, 
     device = device_str)
 
@@ -33,14 +34,15 @@ for param in model.backbone.parameters():
 
 # %% Criterion
 
-Focal_Loss = True
+criterion_type = 'Dice' # Seleccionar entre 'Dice', 'Focal' o 'CE'
 
-if Focal_Loss:
+if criterion_type == 'Dice':
+    criterion = GenDiceLoss(eps = 10, device=device)
 
-    class_weights = calculate_weights_FLoss (MASK_DIR, 6, 512, device)
-    criterion = FocalLoss(alpha= class_weights, gamma=2)
+elif criterion_type == 'Focal':
+    criterion = FocalLoss(gamma = 1)
 
-else:
+elif criterion_type == 'CE':
     criterion = torch.nn.CrossEntropyLoss()
 
 # %% Train
@@ -63,7 +65,7 @@ for e in range(1, epochs+1):
         loss.backward()
         optimizer.step()
         loss, current = loss.item(), (batch_ix + 1) * len(x)
-        print(f"loss: {loss:.4f} [{current:>5d}/{len(dataset):>5d}]")
+        print(f"loss ({criterion_type}): {loss:.4f} [{current:>5d}/{len(dataset):>5d}]")
 
 # %%
 print('fin')

@@ -21,7 +21,7 @@ model = weights_manager.get_pretrained_model(
     model_identifier = "Sentinel2_SwinT_SI_RGB",
     fpn = True,
     head = satlaspretrain_models.Head.SEGMENT,
-    num_categories = 6, 
+    num_categories = 4,
     device = device_str)
 
 model = model.to(device)
@@ -37,7 +37,7 @@ if criterion_type == 'Dice':
     criterion = GenDiceLoss(eps = 10, device=device)
 
 elif criterion_type == 'Focal':
-    criterion = FocalLoss(gamma = 1)
+    criterion = FocalLoss(alpha= torch.Tensor([1,10,1,1]).to(device), gamma = 1)
 
 elif criterion_type == 'CE':
     criterion = torch.nn.CrossEntropyLoss()
@@ -51,7 +51,7 @@ train_size = int(0.8 * len(dataset))
 test_size = len(dataset) - train_size
 train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
 
-batch_size = 1
+batch_size = 10
 train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
@@ -68,8 +68,7 @@ for epoch in range(epochs):
         loss = criterion(outputs, masks.long())
         loss.backward()
         optimizer.step()
-
-        loss, current = loss.item(), (batch_ix + 1) * len(x)
-        print(f"loss ({criterion_type}): {loss:.4f} [{current:>5d}/{len(dataset):>5d}]")
+        loss, current = loss.item(), (batch_ix + 1) * len(images)
+        print(f"loss ({criterion_type}): {loss:.4f} [{current:>5d}/{len(train_dataset):>5d}]")
 
 print('Fin modelo actual desarrollado ')

@@ -52,17 +52,16 @@ class FocalLoss(nn.Module):
             Devuelve el valor de la función de pérdida
     """
 
-    def __init__(self, gamma=1):
+    def __init__(self, alpha, gamma=1):
         super(FocalLoss, self).__init__()
         self.gamma = gamma
+        self.alpha = alpha
 
     def forward(self, inputs, targets):
         ce_loss = F.cross_entropy(inputs, targets, reduction='none')
         pt = torch.exp(-ce_loss)
-        print(pt.shape)
-        sum_pt = pt.sum(dim=0)
-        alpha = (pt.shape[0] - (sum_pt)) / (sum_pt)
-        loss = (alpha * (1 - pt) ** self.gamma * ce_loss).mean()
+        loss = (self.alpha[targets] * (1 - pt) ** self.gamma * ce_loss).mean()
+
         return loss
 
 class GenDiceLoss(nn.Module):
@@ -83,7 +82,7 @@ class GenDiceLoss(nn.Module):
         self.device = device
 
     def forward(self, inputs, targets):
-
+        inputs = inputs.log_softmax(dim=1).exp()
         targets_ohe = F.one_hot(targets)
         wl = 1 / ((targets_ohe.sum(dim=(0)) + self.eps) ** 2)
 

@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from PIL import Image as PIM
+import matplotlib.pyplot as plt
 
 class Dataset(torch.utils.data.Dataset):
     """
@@ -130,3 +131,27 @@ def calculate_weights_FLoss (mask_path, n_classes, n_dim, device):
         class_weights.append(weight)
         
     return torch.FloatTensor(class_weights).to(device)
+
+def check_results(image, hard_pred):
+    array_base = image.permute(1,2,0).cpu().numpy()
+    array_mask = hard_pred.cpu().numpy()
+
+    # Crear una copia de la imagen para superponer la matriz
+    imagen_superpuesta = array_base.copy()
+
+    # Crear una máscara para los valores igual a 2
+    mascara = array_mask == 1
+
+    # Aplicar color amarillo a los píxeles donde la máscara es True
+    # El color amarillo en RGB es (1, 1, 0)
+    imagen_superpuesta[mascara] = [255, 255, 0]
+
+    # Mostrar la imagen original y la imagen superpuesta
+    fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+    axes[0].imshow(array_base)
+    axes[0].set_title("Imagen Original")
+    axes[0].axis('off')
+
+    axes[1].imshow(imagen_superpuesta)
+    axes[1].set_title("Imagen con Superposición")
+    axes[1].axis('off')

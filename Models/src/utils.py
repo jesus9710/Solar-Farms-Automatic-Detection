@@ -30,9 +30,9 @@ class Dataset(torch.utils.data.Dataset):
 
     def __getitem__(self, ix):
 
-        img_path = self.image_dir.joinpath(self.images[ix]) # Archivo de imagen ix
-        mask_path = self.mask_dir.joinpath(self.masks[ix]) # Archivo de máscara ix
-
+        img_path = self.images[ix] # Archivo de imagen ix
+        mask_path = self.masks[ix] # Archivo de máscara ix
+        
         image = PIM.open(img_path).convert("RGB")
         mask = PIM.open(mask_path)
 

@@ -15,7 +15,7 @@ class Dataset(torch.utils.data.Dataset):
 
     """
 
-    def __init__(self, image_dir, mask_dir, transform, device):
+    def __init__(self, image_dir, mask_dir, transform, device = torch.device('cuda')):
 
         self.image_dir = image_dir
         self.mask_dir = mask_dir
@@ -42,29 +42,66 @@ class Dataset(torch.utils.data.Dataset):
 
 class FocalLoss(nn.Module):
     """
-    Esta clase implementa una función de pérdida Focal integrable en el ciclo de entrenamiento
-    de pytorch
+    Esta clase implementa una función de pérdida Focal integrable en el ciclo de entrenamiento de pytorch
 
-    Attributes:
-        alpha (tensor): tensor de pesos asociados a cada clase
+    Atributos:
         gamma (int): parámetro de ponderación de las muestras mal clasificadas
 
-    Methods:
+    Métodos:
         forward(inputs:tensor, targets:tensor):
             Devuelve el valor de la función de pérdida
     """
 
-    def __init__(self, alpha=None, gamma=2):
+    def __init__(self, alpha, gamma=1):
         super(FocalLoss, self).__init__()
-        self.alpha = alpha
         self.gamma = gamma
+        self.alpha = alpha
 
     def forward(self, inputs, targets):
         ce_loss = F.cross_entropy(inputs, targets, reduction='none')
         pt = torch.exp(-ce_loss)
         loss = (self.alpha[targets] * (1 - pt) ** self.gamma * ce_loss).mean()
+
         return loss
 
+class GenDiceLoss(nn.Module):
+    """
+    Esta clase implementa una función de pérdida Dice generalizada integrable en el ciclo de entrenamiento de pytorch
+
+    Atributos:
+        eps (float): constante de volumen (preferiblemente >= 1)
+
+    Métodos:
+        forward(inputs:tensor, targets:tensor):
+            Devuelve el valor de la función de pérdida
+    """
+
+    def __init__(self, eps = 10, device = torch.device('cuda')):
+        super(GenDiceLoss, self).__init__()
+        self.eps = eps
+        self.device = device
+
+    def forward(self, inputs, targets):
+        inputs = inputs.log_softmax(dim=1).exp()
+        targets_ohe = F.one_hot(targets)
+        wl = 1 / ((targets_ohe.sum(dim=(0)) + self.eps) ** 2)
+
+        num = torch.zeros(targets_ohe.shape).to(self.device)
+        den = torch.zeros(targets_ohe.shape).to(self.device)
+
+        for i in range(num.shape[-1]):
+            num[:,:,:,i] = targets_ohe[:,:,:,i] * inputs[:,i,:,:]
+            den[:,:,:,i] = targets_ohe[:,:,:,i] + inputs[:,i,:,:]
+
+        num = num.sum(dim=(0))
+        num = (num * wl).sum(dim=-1)
+
+        den = den.sum(dim=(0))
+        den = (den * wl).sum(dim=-1)
+
+        loss = (1 - 2 * num/den).mean()
+        return loss
+    
 def calculate_weights_FLoss (mask_path, n_classes, n_dim, device):
     """
     Función para calcular los pesos necesarios para la función de pérdida focal
@@ -93,3 +130,23 @@ def calculate_weights_FLoss (mask_path, n_classes, n_dim, device):
         class_weights.append(weight)
         
     return torch.FloatTensor(class_weights).to(device)
+
+def calculate_accuracy(preds, labels):
+    _, preds = torch.max(preds, dim=1)  # Obtener las clases predichas
+    correct = torch.eq(preds, labels).sum().item()
+    total = labels.numel()
+    accuracy = correct / total
+    return accuracy
+
+def calculate_class_accuracy(preds, labels, class_index):
+    _, preds = torch.max(preds, dim=1)  # get predicted classes
+    # count correctly classifed pixels for a given class index (solar=2)
+    correct = ((preds == class_index) & (labels == class_index)).sum().item()   
+    # count total number of pixels in the given class
+    total = (labels == class_index).sum().item()  
+    if total == 0:
+        return 0 
+        # if there are no pixels of a certain class return zero to avoid division by zero
+    else:
+        accuracy = correct / total
+        return accuracy

@@ -22,7 +22,7 @@ model = weights_manager.get_pretrained_model(
     model_identifier = "Aerial_SwinB_SI",
     fpn = True,
     head = satlaspretrain_models.Head.SEGMENT,
-    num_categories = 4,
+    num_categories = 2,
     device = device_str)
 
 model = model.to(device)
@@ -38,11 +38,11 @@ for param in model.head.parameters():
     param.requires_grad = True
 
 # %% Criterion
-criterion_type = 'CE' # Seleccionar entre 'Dice', 'Focal' o 'CE'
+criterion_type = 'Dice' # Seleccionar entre 'Dice', 'Focal' o 'CE'
 
 if criterion_type == 'Dice':
     #criterion = GenDiceLoss(eps = 10, device=device)
-    criterion = smp.losses.DiceLoss(mode='multiclass', classes=4, eps=1e-07)
+    criterion = smp.losses.DiceLoss(mode='multiclass', classes=2, eps=1e-07)
 
 elif criterion_type == 'Focal':
     criterion = FocalLoss(alpha= torch.Tensor([1,1,100,1]).to(device), gamma = 1)
@@ -62,7 +62,7 @@ train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_s
 test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
 # %% Train
-epochs = 30
+epochs = 50
 optimizer = torch.optim.Adam(model.parameters())
 
 for epoch in range(epochs):
@@ -73,8 +73,8 @@ for epoch in range(epochs):
         out_backbone = model.backbone(images)
         out_fpn = model.fpn(out_backbone)
         out_upsample = model.upsample(out_fpn)
-        outputs, loss = model.head(images, out_upsample, masks)
-        #loss = criterion(outputs, masks)
+        outputs, loss = model.head(0, out_upsample, masks)
+        # loss = criterion(outputs, masks)
         loss.backward()
         optimizer.step()
         loss, current = loss.item(), (batch_ix + 1) * len(images)
@@ -90,19 +90,22 @@ soft_preds = []
 target = []
 images_list = []
 
+train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=20, shuffle=False)
+
 with torch.no_grad():
-    for image, mask in train_dataloader:
-        out_backbone = model.backbone(images)
+    for ind, (image_i, mask_i) in enumerate(train_dataloader):
+        out_backbone = model.backbone(image_i)
         out_fpn = model.fpn(out_backbone)
         out_upsample = model.upsample(out_fpn)
-        outputs, _ = model.head(images, out_upsample, masks)
+        print(mask_i.shape)
+        outputs, _ = model.head(image_i, out_upsample, mask_i)
         soft_preds.append(outputs)
-        target.append(mask)
-        images_list.append(image)
+        target.append(mask_i)
+        images_list.append(image_i)
 
-soft_preds = torch.cat(soft_preds, dim=0)
-target = torch.cat(target, dim=0)
-images_ = torch.cat(images_list, dim=0)
+soft_preds = torch.cat(soft_preds)
+target = torch.cat(target)
+images_ = torch.cat(images_list)
 
 # %% Hard output
 
@@ -111,15 +114,22 @@ print(hard_pred.min())
 
 # %% Base Line
 
-base_preds = (torch.ones(*hard_pred.shape) * 3).long().to(device)
+base_preds = (torch.zeros(*hard_pred.shape)).long().to(device)
 
 # %% Evaluation
 
-tp, fp, fn, tn = smp.metrics.get_stats(base_preds, target, mode='multiclass',num_classes=4)
-base_score = smp.metrics.functional.accuracy(tp[:,2], fp[:,2], fn[:,2], tn[:,2]).mean()
+tp, fp, fn, tn = smp.metrics.get_stats(base_preds, target, mode='multiclass',num_classes=2)
+base_score = smp.metrics.functional.iou_score(tp, fp, fn, tn).mean()
 
-tp, fp, fn, tn = smp.metrics.get_stats(hard_pred, target, mode='multiclass',num_classes=4)
-score = smp.metrics.functional.accuracy(tp[:,2], fp[:,2], fn[:,2], tn[:,2]).mean()
+tp, fp, fn, tn = smp.metrics.get_stats(hard_pred, target, mode='multiclass',num_classes=2)
+score = smp.metrics.functional.iou_score(tp, fp, fn, tn).mean()
 
 print(f'BaseLine score: {base_score}')
 print(f'model score: {score}')
+
+# %% Visualization
+
+ind = np.random.randint(0, len(images_))
+check_results(images_[ind,:,:,:], hard_pred[ind,:,:])
+
+# %%

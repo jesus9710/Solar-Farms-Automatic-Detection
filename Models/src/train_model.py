@@ -8,7 +8,7 @@ from pathlib import Path # Para manejo de rutas de archivos
 from utils import * # Funciones y variables del módulo utils
 
 #%% Gestor de pesos y dispositivo de cómputo
-weights_manager = satlaspretrain_models.Weights()  # Iniciacilización del gestor de pesos del modelo preentrenado
+weights_manager = satlaspretrain_models.Weights()  # Inicialización del gestor de pesos del modelo preentrenado
 device_str = "cuda" if torch.cuda.is_available() else "cpu"
 device = torch.device(device_str)  # Dispositivo de cómputo: GPU si está disponible, sino CPU
 
@@ -54,7 +54,7 @@ transform = transforms.ToTensor() # Secuencia de transformaciones antes de envia
 
 dataset = Dataset(IMAGE_DIR, MASK_DIR, transform, device) # Composición del conjunto de datos
 train_size = int(0.8 * len(dataset)) # Tamaño del conjunto de entrenamiento = 80% 
-test_size = len(dataset) - train_size # Tamaño del conjunto de prueba = % restante
+test_size = len(dataset) - train_size # Tamaño del conjunto de prueba = 20% restante
 train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])  # División del conjunto de datos en entrenamiento y prueba
 
 batch_size = 40 #  Tamaño del batch (subconjuntos de datos)

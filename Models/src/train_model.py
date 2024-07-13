@@ -105,7 +105,7 @@ soft_preds = torch.cat(soft_preds)
 target = torch.cat(target)
 images_ = torch.cat(images_list) # Concatenación de las predicciones suaves, máscaras objetivo e imágenes
 
-# %% Hard output (salida binarizada)
+# %% Hard output o predicciones duras (salida binarizada)
 
 hard_pred = torch.argmax(soft_preds, dim=1) # Obtención de las predicciones duras a partir de las predicciones suaves
 print(hard_pred.min()) # Valor mínimo de las predicciones duras

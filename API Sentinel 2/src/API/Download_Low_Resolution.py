@@ -80,5 +80,3 @@ data_full_color = request_true_color.get_data()
 
 #%% Plotting
 plot_image(data_full_color[0], factor=3.5 / 255, clip_range=(0, 1))
-
-# %%

@@ -13,6 +13,7 @@ class Dataset(torch.utils.data.Dataset):
         image_dir (Path): directorio de imágenes RGB
         mask_dir (Path): directorio de máscaras
         transform (transform): transformación de torchvisión
+        device (device): dispositivo de computación
 
     """
 
@@ -46,6 +47,7 @@ class FocalLoss(nn.Module):
     Esta clase implementa una función de pérdida Focal integrable en el ciclo de entrenamiento de pytorch
 
     Atributos:
+        alpha (list): lista de pesos asociados a cada clase
         gamma (int): parámetro de ponderación de las muestras mal clasificadas
 
     Métodos:
@@ -133,17 +135,23 @@ def calculate_weights_FLoss (mask_path, n_classes, n_dim, device):
     return torch.FloatTensor(class_weights).to(device)
 
 def check_results(image, hard_pred):
+    """
+    Función para graficar imágenes con una capa superpuesta de predicciones
+
+    Args:
+        image (tensor): imagen RGB (Valores normalizados entre 0-1)
+        hard_pred (tensor): máscara de predicciones
+    """
     array_base = image.permute(1,2,0).cpu().numpy()
     array_mask = hard_pred.cpu().numpy()
 
     # Crear una copia de la imagen para superponer la matriz
     imagen_superpuesta = array_base.copy()
 
-    # Crear una máscara para los valores igual a 2
+    # Crear una máscara para los píxeles predichos como solares
     mascara = array_mask == 1
 
-    # Aplicar color amarillo a los píxeles donde la máscara es True
-    # El color amarillo en RGB es (1, 1, 0)
+    # Aplicar color amarillo a los píxeles solares
     imagen_superpuesta[mascara] = [255, 255, 0]
 
     # Mostrar la imagen original y la imagen superpuesta
@@ -155,3 +163,5 @@ def check_results(image, hard_pred):
     axes[1].imshow(imagen_superpuesta)
     axes[1].set_title("Imagen con Superposición")
     axes[1].axis('off')
+
+    plt.show()

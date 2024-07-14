@@ -2,7 +2,8 @@
 
 import requests
 import pandas as pd
-from functions import *
+from utils import *
+from pathlib import Path
 
 #%% Credenciales
 
@@ -39,8 +40,6 @@ c_filename = "product1"
 
 Ids = [products[0] ,products[1]]
 
-dir = 'C:/Jesús/5_Programacion/Local Scripts Python/TFM Kschool/Instalaciones fotovoltaicas/Token Creation/Prueba_2'
+dir = Path.cwd().parent.parent / 'data'
 
 download_products(access_token = access_token, Ids = Ids, dir=dir)
-
-# %%

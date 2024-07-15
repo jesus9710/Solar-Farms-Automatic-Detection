@@ -17,11 +17,14 @@ device = torch.device(device_str)  # Dispositivo de cómputo: GPU si está dispo
 
 # %% Definición del modelo
 
-upsample_path = MODEL_DIR / 'upsample_weights.pth'
-head_path = MODEL_DIR / 'head_weights.pth'
+load_model = False
 
-upsample_path = None
-head_path = None
+if load_model:
+    upsample_path = MODEL_DIR / 'upsample_weights.pth'
+    head_path = MODEL_DIR / 'head_weights.pth'
+else:
+    upsample_path = None
+    head_path = None
 
 model = Segmentation_model(model_identifier = "Aerial_SwinB_SI",
                            upsample_path=upsample_path,
@@ -64,6 +67,7 @@ train_model = True
 
 if train_model:
     hist = model.fit(epochs, optimizer, train_dataloader, val_dataloader, early_stopping=es)
+    show_loss_accuracy_evolution(hist)
 
 # %% Predicción
 
@@ -79,15 +83,10 @@ score = evaluate_model(y_hat, target)
 print(f'BaseLine score: {base_score}')
 print(f'model score: {score}')
 
-# %% Visualización
+# %% Visualización aleatoria
 
 ind = np.random.randint(0, len(images))
 check_results(images[ind,:,:,:], y_hat[ind,:,:])
-
-# %% Evolución métricas
-
-if train_model:
-    show_loss_accuracy_evolution(hist)
 
 # %% Guardar modelo
 

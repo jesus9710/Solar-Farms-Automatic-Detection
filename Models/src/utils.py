@@ -104,7 +104,7 @@ class Segmentation_model(nn.Module):
             self.criterion_type = 'GDLv'
 
         elif criterion == 'Focal':
-            self.criterion = FocalLoss(alpha= torch.Tensor([1,1,100,1]).to(device), gamma = 1)
+            self.criterion = FocalLoss(alpha= torch.Tensor([1,10]).to(device), gamma = 1)
             self.criterion_type = 'Focal Loss'
 
         elif criterion == 'CrossEntropy':
@@ -134,6 +134,7 @@ class Segmentation_model(nn.Module):
         # Bucle de entrenamiento
         for epoch in range(epochs): # Iteración sobre las épocas
             self.train() # Configuración del modo entrenamiento
+            loss_hist = []
 
             # Actualización del gradiente
             for images, masks in train_dataloader: # Iteración sobre los batches
@@ -143,7 +144,9 @@ class Segmentation_model(nn.Module):
                     loss = self.criterion(outputs, masks)
                 loss.backward() # Cálculo de los gradientes de la pérdida con respecto a los parámetros del modelo (retropropagación)
                 optimizer.step() # Actualización de los parámetros del modelo utilizando los gradientes calculados y el optimizador 
-                loss = loss.item()
+                loss_hist.append(loss.item())
+
+            loss = np.array(loss_hist).mean()
 
             # Cálculo de métrica
             y_hat, *_, target = self.predict(train_dataloader)

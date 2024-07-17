@@ -17,7 +17,7 @@ device = torch.device(device_str)  # Dispositivo de cómputo: GPU si está dispo
 
 # %% Definición del modelo
 
-load_model = False
+load_model = True
 
 if load_model:
     upsample_path = MODEL_DIR / 'upsample_weights.pth'
@@ -37,11 +37,11 @@ model = model.to(device)
 
 # %% Parámetros
 
-batch_size = 40 #  Tamaño del batch (subconjuntos de datos)
-epochs = 50 # Número de veces que todo el conjunto de datos es pasado por la red
+batch_size = 60 #  Tamaño del batch (subconjuntos de datos)
+epochs = 200 # Número de veces que todo el conjunto de datos es pasado por la red
 
 optimizer = torch.optim.Adam(model.parameters()) # Se elige el optimizador Adam (Adaptive Moment Estimation)
-es = EarlyStopping(patience=10)
+es = EarlyStopping(patience=20)
 transform = transforms.ToTensor() # Secuencia de transformaciones antes de enviarlo al modelo donde se convertirá la imagen a tensor para ser procesado en GPU
 
 # %% Train/Test Dataloaders
@@ -63,7 +63,7 @@ test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=test_size
 
 # %% Train
 
-train_model = True
+train_model = False
 
 if train_model:
     hist = model.fit(epochs, optimizer, train_dataloader, val_dataloader, early_stopping=es)

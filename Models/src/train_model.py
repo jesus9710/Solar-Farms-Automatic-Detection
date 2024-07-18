@@ -61,7 +61,14 @@ train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_s
 val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=val_size, shuffle=True)
 test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=test_size, shuffle=False) # Creación de un cargador de datos para el conjunto de entrenamiento, validación y prueba
 
-# %% Train
+transform = transforms.Compose([
+    transforms.ToTensor(),
+])
+
+dataset = Dataset(IMAGE_DIR, MASK_DIR, transform, device)
+train_size = int(0.8 * len(dataset))
+test_size = len(dataset) - train_size
+train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
 
 train_model = False # Variable para determinar si se entrena el modelo
 

@@ -2,10 +2,13 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from sklearn.metrics import auc
 from PIL import Image as PIM
 import matplotlib.pyplot as plt
 import satlaspretrain_models
-import segmentation_models_pytorch as smp 
+import segmentation_models_pytorch as smp
+import torchvision.transforms as transforms
+import random
 
 class Dataset(torch.utils.data.Dataset):
     """
@@ -39,7 +42,12 @@ class Dataset(torch.utils.data.Dataset):
         image = PIM.open(img_path).convert("RGB")
         mask = PIM.open(mask_path)
 
-        image, mask = self.transform(image).to(self.device).float(), self.transform(mask).squeeze().to(self.device).long() # Formato para entrenamiento
+        data_format = transforms.ToTensor()
+
+        image, mask = data_format(image).to(self.device).float(), data_format(mask).squeeze().to(self.device).long() # Formato para entrenamiento
+
+        if self.transform:
+            image, mask = self.transform(image, mask)
 
         return image, mask
     
@@ -57,11 +65,11 @@ class Segmentation_model(nn.Module):
             Propagación hacia adelante de la red neuronal
         fit(epochs: int, optimizer: torch optimizer, train_dataloader: torch dataloader,
             val_dataloader: torch dataloader, early_stopping: Early_Stopping)
-        predict(dataloader:torch dataloader):
+        predict(dataloader:torch dataloader, threshold:float):
             Obtención de predicciones
     """
 
-    def __init__(self, model_identifier, upsample_path = None, head_path = None, num_categories = 2, criterion = 'CrossEntropy', device = 'cuda'):
+    def __init__(self, model_identifier, backbone_path = None, upsample_path = None, head_path = None, num_categories = 2, criterion = 'CrossEntropy', alpha = None, gamma = None, device = 'cuda'):
 
         super(Segmentation_model, self).__init__()
 
@@ -77,6 +85,8 @@ class Segmentation_model(nn.Module):
         self.__dict__ = model.__dict__.copy()
         self.num_categories = num_categories
 
+        if backbone_path:
+            self._Load_Backbone(backbone_path)
         # Cargar bloques upsample y head
         if upsample_path:
             self._Load_Upsample(upsample_path)
@@ -104,16 +114,16 @@ class Segmentation_model(nn.Module):
             self.criterion_type = 'GDLv'
 
         elif criterion == 'Focal':
-            self.criterion = FocalLoss(alpha= torch.Tensor([1,10]).to(device), gamma = 1)
+            self.criterion = FocalLoss(alpha= torch.Tensor(alpha).to(device), gamma = 2)
             self.criterion_type = 'Focal Loss'
 
         elif criterion == 'CrossEntropy':
             self.criterion = None
-            self.criterion_type = 'CE'
+            self.criterion_type = 'CrossEntropy'
         
         else:
             self.criterion = None
-            self.criterion_type = 'CE'
+            self.criterion_type = 'CrossEntropy'
         
     def forward(self, x, y):
 
@@ -129,7 +139,7 @@ class Segmentation_model(nn.Module):
     
     def fit(self, epochs, optimizer, train_dataloader, val_dataloader = None, early_stopping = None):
 
-        hist = History()
+        hist = History(loss=self.criterion_type)
 
         # Bucle de entrenamiento
         for epoch in range(epochs): # Iteración sobre las épocas
@@ -176,11 +186,14 @@ class Segmentation_model(nn.Module):
             
             # Early stopping
             if early_stopping:
-                early_stopping((self.upsample.state_dict, self.head.state_dict),val_loss)
+                early_stopping((self.upsample, self.head),val_loss)
                 
                 if early_stopping.early_stop:
-                    self.upsample.state_dict, self.head.state_dict = early_stopping.best_model
+                    w_upsample, w_head = tuple(early_stopping.best_weigths)
+                    self.upsample.load_state_dict(w_upsample)
+                    self.head.load_state_dict(w_head)
                     print("Early stopping")
+                    early_stopping._reset()
 
                     break
 
@@ -188,7 +201,7 @@ class Segmentation_model(nn.Module):
 
         return hist.get_history()
     
-    def predict(self, dataloader):
+    def predict(self, dataloader, threshold = None):
 
         self.eval()
 
@@ -207,7 +220,11 @@ class Segmentation_model(nn.Module):
         target = torch.cat(target)
         images = torch.cat(images_list) # Concatenación de las predicciones suaves, máscaras objetivo e imágenes
 
-        y_hat = torch.argmax(soft_preds, dim=1) # Obtención de las predicciones duras a partir de las predicciones suaves
+        # Aplicar threshold (solo para num_categories = 2)
+        if threshold:
+            y_hat = torch.where(soft_preds[:,1:2,:,:].squeeze(dim=1) >= threshold, 1, 0)
+        else:
+            y_hat = torch.argmax(soft_preds, dim=1) # Argumento que maximiza la dimensión clase
 
         return y_hat, soft_preds, images, target
 
@@ -219,6 +236,9 @@ class Segmentation_model(nn.Module):
         upsample_state_dict = torch.load(upsample_path)
         self.upsample.load_state_dict(upsample_state_dict)
 
+    def _Load_Backbone(self, backbone_path):
+        backbone_state_dict = torch.load(backbone_path)
+        self.backbone.load_state_dict(backbone_state_dict)
 
 class History:
     """
@@ -233,8 +253,8 @@ class History:
         get_history():
             Obtención del historial
     """
-    def __init__(self):
-        self.history = {'epoch':[],'train_loss': [], 'val_loss': [], 'train_metric': [], 'val_metric': []}
+    def __init__(self, loss = 'CrossEntropy'):
+        self.history = {'epoch':[],'train_loss': [], 'val_loss': [], 'train_metric': [], 'val_metric': [], 'loss': loss}
 
     def update(self, epoch, train_loss, train_metric, val_loss = None, val_metric = None):
         self.history['epoch'].append(epoch)
@@ -256,7 +276,7 @@ class EarlyStopping:
         best_loss (float): registro del mejor valor de la función de pérdida
         counter (int): contador de número de epochs en los que no hay mejora
         early_stop (boolean): Indicador de activación del early stopping
-        best_model (tuple): Tupla que contiene el mejor modelo (upsample.state_dict, head.state_dict)
+        best_weigths (tuple): Tupla que contiene el mejor modelo (upsample.state_dict(), head.state_dict())
     """
     def __init__(self, patience=5, min_delta=0):
         self.patience = patience
@@ -264,21 +284,58 @@ class EarlyStopping:
         self.best_loss = None
         self.counter = 0
         self.early_stop = False
-        self.best_model = None
+        self.best_weigths = None
 
     def __call__(self, model, val_loss):
         if self.best_loss is None:
             self.best_loss = val_loss
-            self.best_model = model
+            self.best_weigths = (block.state_dict() for block in model)
         elif val_loss < self.best_loss - self.min_delta:
             self.best_loss = val_loss
             self.counter = 0
-            self.best_model = model
+            self.best_weigths = (block.state_dict() for block in model)
         else:
             self.counter += 1
             if self.counter >= self.patience:
                 self.early_stop = True
 
+    def _reset(self):
+        self.counter = 0
+        self.early_stop = False
+    
+    def _hard_reset(self):
+        self.counter = 0
+        self.early_stop = False
+        self.best_loss = None
+        self.best_weigths = None
+
+class RandomTransform:
+    """
+    Esta clase permite aplicar una composición de transformaciones con componente aleatorio y misma semilla
+    para imagen y máscara.
+
+    Atributos:
+        transform (torch transform): transformación de torch o torchvision con componente aleatorio
+    """
+    def __init__(self, transform):
+        self.transform = transform
+
+    def __call__(self, image, mask):
+        # Generar una semilla aleatoria
+        seed = np.random.randint(0, 2**31)
+        
+        # Transformar imagen
+        random.seed(seed)
+        torch.manual_seed(seed)
+        transformed_image = self.transform(image)
+
+        # Transformar máscara
+        random.seed(seed)
+        torch.manual_seed(seed)
+        transformed_mask = self.transform(mask)
+        
+        return transformed_image, transformed_mask
+    
 class FocalLoss(nn.Module):
     """
     Esta clase implementa una función de pérdida Focal integrable en el ciclo de entrenamiento de pytorch
@@ -371,54 +428,103 @@ def calculate_weights_FLoss (mask_path, n_classes, n_dim, device):
         
     return torch.FloatTensor(class_weights).to(device)
 
-def check_results(image, hard_pred):
+def check_results(image, hard_pred, target):
     """
     Función para graficar imágenes con una capa superpuesta de predicciones
 
     Args:
         image (tensor): imagen RGB (Valores normalizados entre 0-1)
         hard_pred (tensor): máscara de predicciones
+        target (tensor): máscara de valores reales
     """
     array_base = image.permute(1,2,0).cpu().numpy()
-    array_mask = hard_pred.cpu().numpy()
+    array_preds = hard_pred.cpu().numpy()
 
     # Crear una copia de la imagen para superponer la matriz
-    imagen_superpuesta = array_base.copy()
+    preds_image = array_base.copy()
 
     # Crear una máscara para los píxeles predichos como solares
-    mascara = array_mask == 1
+    predicciones = array_preds == 1
 
     # Aplicar color amarillo a los píxeles solares
-    imagen_superpuesta[mascara] = [255, 255, 0]
+    preds_image[predicciones] = [255, 255, 0]
 
-    # Mostrar la imagen original y la imagen superpuesta
-    fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+    # Mismo proceso para el target
+    array_mask = target.cpu().numpy() == 1
+    target_image = array_base.copy()
+    target_image[array_mask] = [0, 128, 255]
+
+    # Mostrar la imagen original y las máscaras superpuestas
+    fig, axes = plt.subplots(1, 3, figsize=(12, 6))
     axes[0].imshow(array_base)
     axes[0].set_title("Imagen Original")
     axes[0].axis('off')
 
-    axes[1].imshow(imagen_superpuesta)
-    axes[1].set_title("Imagen con Superposición")
+    axes[1].imshow(preds_image)
+    axes[1].set_title("Predicciones")
     axes[1].axis('off')
+
+    axes[2].imshow(target_image)
+    axes[2].set_title("Máscara Original")
+    axes[2].axis('off')
 
     plt.show()
 
-def evaluate_model(predictions, y, mode = 'multiclass', num_classes = 2):
+def evaluate_model(predictions, y, mode = 'multiclass', num_classes = 2, threshold = None):
     """
     Función para evaluar el IOU
 
     Args:
-        predictions (tensor): 
-        y (tensor): 
-        mode (str): 
-        num_classes (int):
+        predictions (tensor): tensor de predicciones.
+        y (tensor): tensor "ground truth"
+        mode (str): determina el formato de los tensores:
+                                modo 'binary': (N,1,...)
+                                modo 'multilabel': (N,C,...)
+                                modo 'multiclass': (N,...)
+        num_classes (int): número de clases (para modo 'multiclass')
     
     Returns:
         float: Métrica IOU
     """
-    tp, fp, fn, tn = smp.metrics.get_stats(predictions, y, mode=mode, num_classes=num_classes)
+    tp, fp, fn, tn = smp.metrics.get_stats(predictions, y, mode=mode, num_classes=num_classes, threshold=threshold)
     score = smp.metrics.functional.iou_score(tp, fp, fn, tn).mean() # Cálculo de las estadísticas + IoU para el modelo
     return score
+
+def evaluate_model_auc(predictions, y, negative_preds = False):
+    """
+    Función para evaluar el área bajo la curva de la métrica IOU a partir de una predicción multiclase.
+    La predicción en formato multiclase (N,...) debe estar compuesta por dos categorías.
+
+    Args:
+        predictions (tensor): tensor de predicciones "suaves" (N,...)
+        y (tensor): tensor "ground truth" (N,...)
+        negative_preds (bool): indica cuál es la clase que se quiere evaluar (False: clase 1)
+    
+    Returns:
+        float: Métrica IOU
+    """
+    # Vector de threshold (21 puntos)
+    thresholds = np.linspace(0, 1, 21)
+    scores = []
+
+    # Obtenemos las probabilidades correspondientes a la clase 1
+    if negative_preds:
+        predictions = predictions[:,0:1,:,:]
+    else:
+        predictions = predictions[:,1:2,:,:]
+    
+    y = y.unsqueeze(1) # Mismas dimensiones que las predicciones
+
+    # Obtención de la métrica IOU para cada valor de threshold 
+    for threshold in thresholds:
+
+        y_hat = torch.where(predictions >= threshold, 1, 0)
+
+        tp, fp, fn, tn = smp.metrics.get_stats(y_hat, y, mode='binary')
+        score = smp.metrics.functional.iou_score(tp, fp, fn, tn).mean() # Cálculo de las estadísticas + IoU para el modelo
+        scores.append(score.cpu().item())
+
+    return auc(thresholds, scores), thresholds, scores
 
 def show_loss_accuracy_evolution(history):
     """
@@ -430,7 +536,7 @@ def show_loss_accuracy_evolution(history):
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
 
     ax1.set_xlabel('Epoch')
-    ax1.set_ylabel('MSE')
+    ax1.set_ylabel(history['loss'])
     ax1.plot(history['epoch'], history['train_loss'], label='Train Error')
     ax1.plot(history['epoch'], history['val_loss'], label = 'Val Error')
     ax1.grid()
@@ -444,3 +550,13 @@ def show_loss_accuracy_evolution(history):
     ax2.legend()
 
     plt.show()
+
+def show_IOU_curve(thresholds, scores):
+    fig, ax = plt.subplots(figsize=(6,6))
+    ax.set_xlabel('Threshold')
+    ax.set_ylabel('IOU')
+    ax.plot(thresholds,scores)
+    ax.grid()
+
+    plt.show()
+    

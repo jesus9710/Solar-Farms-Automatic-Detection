@@ -13,22 +13,22 @@ file_name = "merged_raster.tiff"
 image_path = Path.cwd().parent.parent / ('data/' + file_name)
 tiff_image = rasterio.open(image_path)
 
-adm_lim_badajoz = gpd.read_file('../../data/Badajoz.geojson').to_crs(epsg=32629)
+adm_lim = gpd.read_file('../../data/bbox_Badajoz_CReal.geojson').to_crs(epsg=32630)
 
 #%% preprocesado
 
 brightness_factor = 3.5
 
-new_file_name = "merged_raster_preprocessed"
-new_image_path = Path.cwd().parent.parent / ('data/' + new_file_name)
+new_file_name = "merged_raster_preprocessed.tif"
+new_image_path = Path(os.getcwd().split('src')[0]+'\\data\\'+new_file_name)
 
-save_file = False # Flag de seguridad
+save_file = True # Flag de seguridad
 
 if save_file:
     with rasterio.open(image_path) as src:
 
         # Recortar la imagen usando las geometrías
-        out_image, out_transform = rasterio.mask.mask(src, adm_lim_badajoz.geometry, crop=True)
+        out_image, out_transform = rasterio.mask.mask(src, adm_lim.geometry, crop=True)
         out_meta = src.meta.copy()
 
         # Aumentar el brillo

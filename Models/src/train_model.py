@@ -70,19 +70,11 @@ train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(dataset
 # Para test no es necesario data augmentation
 test_dataset.transform = None
 
-
 train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=val_size, shuffle=True)
 test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=test_size, shuffle=False) # Creación de un cargador de datos para el conjunto de entrenamiento, validación y prueba
 
-transform = transforms.Compose([
-    transforms.ToTensor(),
-])
-
-dataset = Dataset(IMAGE_DIR, MASK_DIR, transform, device)
-train_size = int(0.8 * len(dataset))
-test_size = len(dataset) - train_size
-train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
+# %% Training
 
 train_model = False # Variable para determinar si se entrena el modelo
 
@@ -98,12 +90,12 @@ y_hat, soft_preds, images, target = model.predict(test_dataloader) # Prediccione
 
 # %% Evaluación (threshold = 0.5)
 
-base_preds = (torch.zeros(*y_hat.shape)).long().to(device) # Predicciones baseline (todos los píxeles del valor de la clase mayoritaria)
+base_preds = (torch.ones(*y_hat.shape)).long().to(device) # Predicciones baseline (todos los píxeles del valor de la clase mayoritaria)
 
-base_score = evaluate_model(base_preds, target) # Evaluación del baseline
-train_score = evaluate_model(y_hat_train, target_train) 
-val_score = evaluate_model(y_hat_val, target_val)
-score = evaluate_model(y_hat, target) # Evaluación del modelo
+base_score = evaluate_model(base_preds.unsqueeze(1), target.unsqueeze(1)) # Evaluación del baseline
+train_score = evaluate_model(y_hat_train.unsqueeze(1), target_train.unsqueeze(1)) 
+val_score = evaluate_model(y_hat_val.unsqueeze(1), target_val.unsqueeze(1))
+score = evaluate_model(y_hat.unsqueeze(1), target.unsqueeze(1)) # Evaluación del modelo
 
 print(f'BaseLine score: {base_score}')
 print(f'model score (train): {train_score}')
@@ -131,12 +123,12 @@ show_IOU_curve(thresholds, iou_socres)
 # Índice aleatorio
 ind = np.random.randint(0, len(images))
 
-th = 0.8
+th = 0.5
 
 if th:
     # Los píxeles solares son únicamente aquellos con th% de probabilidad
     predictions = torch.where(soft_preds[:,1:2,:,:].squeeze(dim=1) >= th, 1, 0)
-    
+
 else:
     # Las predicciones son la clase con mayor probabilidad
     predictions = y_hat
@@ -146,9 +138,10 @@ check_results(images[ind,:,:,:], predictions[ind,:,:], target[ind,:,:])
 # %% Guardar modelo
 
 save_model = False # flag de seguridad para guardar modelo
-backcone_fname = 'BB_152R_GDLv_1.pth' # Archivo donde se almacenan los pesos de backbone
-upsample_fname = 'UP_152R_GDLv_1.pth' # Archivo donde se almacenan los pesos de upsampling
-head_fname = 'HE_152R_GDLv_1.pth' # Archivo donde se almacenan los pesos de la cabecera del modelo
+
+backcone_fname = 'BB_ASw_GDLv.pth' # Archivo donde se almacenan los pesos de backbone
+upsample_fname = 'UP_ASw_GDLv.pth' # Archivo donde se almacenan los pesos de upsampling
+head_fname = 'HE_ASw_GDLv.pth' # Archivo donde se almacenan los pesos de la cabecera del modelo
 
 if save_model:
     backbone_state_dict = model.backbone.state_dict()

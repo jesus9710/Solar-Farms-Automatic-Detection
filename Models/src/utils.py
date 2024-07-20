@@ -18,6 +18,8 @@ class Dataset(torch.utils.data.Dataset):
         image_dir (Path): directorio de imágenes RGB
         mask_dir (Path): directorio de máscaras
         transform (transform): transformación de torchvisión
+        images (list): lista de archivos de imagen
+        masks (list): lista de archivos de máscara
         device (device): dispositivo de computación
     """
 
@@ -59,7 +61,11 @@ class Segmentation_model(nn.Module):
         criterion (torch loss): Función de pérdida
         criterion_type (str): Tipo de función de pérdida
         num_categories (int): Número de categorías
-    
+        mode (str): Determina cómo se va a evaluar el modelo
+            - "binary": Los tensores son de dimensión (N,1,...). Se obtienen métricas a partir de la clase 1
+            - "multiclass": Los tensores son de dimensión (N,...). Se obtienen métricas promediando todas las clases
+        eval_with_clases (int): None si el modo es binario. En caso contrario es igual al número de clases
+            
     Métodos:
         forward(x:tensor, y:tensor):
             Propagación hacia adelante de la red neuronal
@@ -67,10 +73,29 @@ class Segmentation_model(nn.Module):
             val_dataloader: torch dataloader, early_stopping: Early_Stopping)
         predict(dataloader:torch dataloader, threshold:float):
             Obtención de predicciones
+        evaluate_model(y_hat: tensor, y: tensor): 
     """
 
     def __init__(self, model_identifier, backbone_path = None, upsample_path = None, head_path = None, num_categories = 2, criterion = 'CrossEntropy', alpha = None, gamma = None, device = 'cuda'):
+        """
+        Inicializa una nueva instancia de Segmentation_model
 
+        Args:
+            model_identifier (str): Identificador del modelo de "Satlas Pretrain Models"
+            backbone_path (path): Ubicación del archivo .pth que almacena los pesos del bloque backbone
+            upsample_path (path): Ubicación del archivo .pth que almacena los pesos del bloque upsample
+            head_path (path): Ubicación del archivo .pth que almacena los pesos del bloque head
+            num_categories (int): Número de categorías del problema de segmentación (debe ser >2)
+            criterion (str): Tipo de función de pérdida. Están disponibles las siguientes:
+                - "CrossEntropy": Entropía Cruzada
+                - "Focal": Función de pérdida Focal
+                - "Dice": Función de pérdida Dice
+                - "GDLv": Función de pérdida Dice con ponderación de clases basado de volumen de píxeles
+            alpha (list): (Sólo con Focal Loss) Lista de pesos de ponderación de clases. Cada valor es un float de 0 a 1
+                La suma de todos los elementos debe ser igual a 1. El tamaño de la lista debe ser igual al número de categorías
+            gamma (int): (Sólo con Focal Loss) Factor de modulación (ponderación de las muestras mal clasificadas)
+            device (str): Dispositivo de cómputo ("cpu" o "cuda")
+        """
         super(Segmentation_model, self).__init__()
 
         # Obtención del modelo fundacional
@@ -85,9 +110,18 @@ class Segmentation_model(nn.Module):
         self.__dict__ = model.__dict__.copy()
         self.num_categories = num_categories
 
+        # Si se tienen más de dos clases, las métricas se calcularán en formato multiclase
+        if self.num_categories > 2:
+            self.mode = "multiclass"
+            self.eval_with_classes = self.num_categories
+        else:
+            self.mode = "binary"
+            self.eval_with_classes = None
+
+        # Cargar bloques de la red
         if backbone_path:
             self._Load_Backbone(backbone_path)
-        # Cargar bloques upsample y head
+        
         if upsample_path:
             self._Load_Upsample(upsample_path)
 
@@ -106,7 +140,7 @@ class Segmentation_model(nn.Module):
 
         # Selección de función de pérdida
         if criterion == 'Dice':
-            self.criterion = smp.losses.DiceLoss(mode='multiclass', classes=2, eps=1e-07)
+            self.criterion = smp.losses.DiceLoss(mode='multiclass', classes=self.num_categories, eps=1e-07)
             self.criterion_type = 'Dice'
         
         elif criterion == 'GDLv':
@@ -114,7 +148,7 @@ class Segmentation_model(nn.Module):
             self.criterion_type = 'GDLv'
 
         elif criterion == 'Focal':
-            self.criterion = FocalLoss(alpha= torch.Tensor(alpha).to(device), gamma = 2)
+            self.criterion = FocalLoss(alpha= torch.Tensor(alpha).to(device), gamma = gamma)
             self.criterion_type = 'Focal Loss'
 
         elif criterion == 'CrossEntropy':
@@ -125,20 +159,29 @@ class Segmentation_model(nn.Module):
             self.criterion = None
             self.criterion_type = 'CrossEntropy'
         
-    def forward(self, x, y):
+    def forward(self, x, y = None):
 
         out_backbone = self.backbone(x) # Envío de las imágenes a través del 'backbone' del modelo para extraer características de bajo y alto nivel 
         out_fpn = self.fpn(out_backbone)  # Envío de las características extraídas por el 'backbone' a través de la FPN (Feature Pyramid Network) para generar mapas de características de múltiples escalas
         out_upsample = self.upsample(out_fpn) # Envío de los mapas de características generados por la FPN a través de la capa de 'upsample' para aumentar la resolución espacial de los mapas de características
         outputs, loss = self.head(0, out_upsample, y)  # Envío de los mapas de características de alta resolución a través de la 'head' del modelo para obtener las predicciones finales y calcula la pérdida comparando las predicciones con las máscaras reales
         
-        if self.criterion:
+        if self.criterion and y:
             loss = self.criterion(outputs, y)
 
         return outputs, loss
     
     def fit(self, epochs, optimizer, train_dataloader, val_dataloader = None, early_stopping = None):
+        """
+        Realiza un bucle de entrenamiento del modelo de segmentación
 
+        Args:
+            epochs (int): Número de épocas
+            optimizer (torch optimizer): Algoritmo de optimización
+            train_dataloader (torch dataloader): dataloader de entrenamiento
+            val_dataloader (torch dataloader): dataloader de validación
+            early_stopping (EarlyStopping): algoritmo de early stopping
+        """
         hist = History(loss=self.criterion_type)
 
         # Bucle de entrenamiento
@@ -160,7 +203,7 @@ class Segmentation_model(nn.Module):
 
             # Cálculo de métrica
             y_hat, *_, target = self.predict(train_dataloader)
-            iou = evaluate_model(y_hat, target, mode = 'multiclass', num_classes = self.num_categories)
+            iou = self.evaluate_model(y_hat, target)
 
             # Pérdida y métrica de validación
             if val_dataloader:
@@ -173,7 +216,7 @@ class Segmentation_model(nn.Module):
                 val_loss = np.array(val_loss_hist).mean()
 
                 y_hat, *_, target = self.predict(val_dataloader)
-                val_iou = evaluate_model(y_hat, target, mode = 'multiclass', num_classes = self.num_categories)
+                val_iou = self.evaluate_model(y_hat, target)
 
                 # Actualización del historial (con métrica de validación)
                 hist.update(epoch, loss, iou, val_loss, val_iou)
@@ -189,7 +232,7 @@ class Segmentation_model(nn.Module):
                 early_stopping((self.upsample, self.head),val_loss)
                 
                 if early_stopping.early_stop:
-                    w_upsample, w_head = tuple(early_stopping.best_weigths)
+                    w_upsample, w_head = early_stopping.best_weigths
                     self.upsample.load_state_dict(w_upsample)
                     self.head.load_state_dict(w_head)
                     print("Early stopping")
@@ -202,6 +245,20 @@ class Segmentation_model(nn.Module):
         return hist.get_history()
     
     def predict(self, dataloader, threshold = None):
+        """
+        Realiza una predicción a partir de un dataloader
+
+        Args:
+            dataloader (torch dataloader): dataloader que se utilizará para la predicción
+            threshold (float): umbral para la predicción (valor entre 0 y 1)
+
+        Returns:
+            tuple: tupla con predicciones y las imágenes y máscaras utilizadas:
+                - y_hat (tensor): predicción basada en el argumento que maximiza la salida del modelo en el eje clase
+                - soft_preds (tensor): salida del modelo
+                - images (tensor): tensor que contiene las imágenes utilizadas para predecir
+                - target (tensor): tensor que contiene las máscaras utilizadas para predecir
+        """
 
         self.eval()
 
@@ -220,13 +277,31 @@ class Segmentation_model(nn.Module):
         target = torch.cat(target)
         images = torch.cat(images_list) # Concatenación de las predicciones suaves, máscaras objetivo e imágenes
 
-        # Aplicar threshold (solo para num_categories = 2)
+        # Aplicar umbral (solo para num_categories = 2)
         if threshold:
-            y_hat = torch.where(soft_preds[:,1:2,:,:].squeeze(dim=1) >= threshold, 1, 0)
+            y_hat = torch.where(soft_preds[:,1:2,:,:].squeeze(dim=1) >= threshold, 1, 0) # clasificación por umbral de la clase 1
         else:
             y_hat = torch.argmax(soft_preds, dim=1) # Argumento que maximiza la dimensión clase
 
         return y_hat, soft_preds, images, target
+    
+    def evaluate_model(self, y_hat, y):
+        """
+        Realiza una evaluación de la métrica IOU
+
+        Args:
+            y_hat (tensor): predicciones
+            y (tensor): valores reales
+
+        Returns:
+            float: valor IOU
+        """
+
+        if self.eval_with_classes is None:
+            y_hat = y_hat.unsqueeze(1)
+            y = y.unsqueeze(1)
+
+        return evaluate_model(y_hat, y, self.mode, self.eval_with_classes)
 
     def _Load_Head(self, head_path):
         head_state_dict = torch.load(head_path)
@@ -254,6 +329,12 @@ class History:
             Obtención del historial
     """
     def __init__(self, loss = 'CrossEntropy'):
+        """
+        Inicializa una nueva instancia de History
+
+        Args:
+            loss (str): Nombre de la función de pérdida utilizada
+        """
         self.history = {'epoch':[],'train_loss': [], 'val_loss': [], 'train_metric': [], 'val_metric': [], 'loss': loss}
 
     def update(self, epoch, train_loss, train_metric, val_loss = None, val_metric = None):
@@ -279,6 +360,13 @@ class EarlyStopping:
         best_weigths (tuple): Tupla que contiene el mejor modelo (upsample.state_dict(), head.state_dict())
     """
     def __init__(self, patience=5, min_delta=0):
+        """
+        Inicializa una nueva instancia de EarlyStopping
+
+        Args:
+            patience (dict): cantidad de epochs para activar el early stopping
+            min_delta (float): mejora mínima para resetear el contador
+        """
         self.patience = patience
         self.min_delta = min_delta
         self.best_loss = None
@@ -289,11 +377,11 @@ class EarlyStopping:
     def __call__(self, model, val_loss):
         if self.best_loss is None:
             self.best_loss = val_loss
-            self.best_weigths = (block.state_dict() for block in model)
+            self.best_weigths = tuple(block.state_dict() for block in model)
         elif val_loss < self.best_loss - self.min_delta:
             self.best_loss = val_loss
             self.counter = 0
-            self.best_weigths = (block.state_dict() for block in model)
+            self.best_weigths = tuple(block.state_dict() for block in model)
         else:
             self.counter += 1
             if self.counter >= self.patience:
@@ -318,6 +406,12 @@ class RandomTransform:
         transform (torch transform): transformación de torch o torchvision con componente aleatorio
     """
     def __init__(self, transform):
+        """
+        Inicializa una nueva instancia de RandomTransform
+
+        Args:
+            transform (torch transform): transformación de torch o torchvision con componente aleatorio
+        """
         self.transform = transform
 
     def __call__(self, image, mask):
@@ -341,8 +435,9 @@ class FocalLoss(nn.Module):
     Esta clase implementa una función de pérdida Focal integrable en el ciclo de entrenamiento de pytorch
 
     Atributos:
-        alpha (list): lista de pesos asociados a cada clase
-        gamma (int): parámetro de ponderación de las muestras mal clasificadas
+        alpha (list): Lista de pesos de ponderación de clases. Cada valor es un float de 0 a 1.
+            La suma de todos los elementos debe ser igual a 1. El tamaño de la lista debe ser igual al número de categorías.
+        gamma (int): factor de modulación (ponderación de las muestras mal clasificadas)
 
     Métodos:
         forward(inputs:tensor, targets:tensor):
@@ -350,6 +445,14 @@ class FocalLoss(nn.Module):
     """
 
     def __init__(self, alpha, gamma=1):
+        """
+        Inicializa una nueva instancia de FocalLoss
+
+        Args:
+            alpha (list): Lista de pesos de ponderación de clases. Cada valor es un float de 0 a 1.
+                La suma de todos los elementos debe ser igual a 1. El tamaño de la lista debe ser igual al número de categorías.
+            gamma (int): factor de modulación (ponderación de las muestras mal clasificadas)
+        """
         super(FocalLoss, self).__init__()
         self.gamma = gamma
         self.alpha = alpha
@@ -363,7 +466,8 @@ class FocalLoss(nn.Module):
 
 class GenDiceLoss(nn.Module):
     """
-    Esta clase implementa una función de pérdida Dice generalizada integrable en el ciclo de entrenamiento de pytorch
+    Esta clase implementa una función de pérdida Dice generalizada con ponderación de clases
+    basado en volumen de píxeles, integrable en el ciclo de entrenamiento de pytorch
 
     Atributos:
         eps (float): constante de volumen (preferiblemente >= 1)
@@ -374,6 +478,13 @@ class GenDiceLoss(nn.Module):
     """
 
     def __init__(self, eps = 10, device = torch.device('cuda')):
+        """
+        Inicializa una nueva instancia de GenDiceLoss
+
+        Args:
+            eps (float): constante de volumen (preferiblemente >= 1)
+            device (torch device): dispositivo de cómputo
+        """
         super(GenDiceLoss, self).__init__()
         self.eps = eps
         self.device = device
@@ -470,29 +581,30 @@ def check_results(image, hard_pred, target):
 
     plt.show()
 
-def evaluate_model(predictions, y, mode = 'multiclass', num_classes = 2, threshold = None):
+def evaluate_model(predictions, y, mode = 'binary', num_classes = None):
     """
     Función para evaluar el IOU
 
     Args:
-        predictions (tensor): tensor de predicciones.
+        predictions (tensor): tensor de predicciones
         y (tensor): tensor "ground truth"
         mode (str): determina el formato de los tensores:
-                                modo 'binary': (N,1,...)
-                                modo 'multilabel': (N,C,...)
-                                modo 'multiclass': (N,...)
+            - modo 'binary': (N,1,...)
+            - modo 'multilabel': (N,C,...)
+            - modo 'multiclass': (N,...)
         num_classes (int): número de clases (para modo 'multiclass')
     
     Returns:
         float: Métrica IOU
     """
-    tp, fp, fn, tn = smp.metrics.get_stats(predictions, y, mode=mode, num_classes=num_classes, threshold=threshold)
+    
+    tp, fp, fn, tn = smp.metrics.get_stats(predictions, y, mode=mode, num_classes=num_classes)
     score = smp.metrics.functional.iou_score(tp, fp, fn, tn).mean() # Cálculo de las estadísticas + IoU para el modelo
-    return score
+    return float(score)
 
 def evaluate_model_auc(predictions, y, negative_preds = False):
     """
-    Función para evaluar el área bajo la curva de la métrica IOU a partir de una predicción multiclase.
+    Función para evaluar el área bajo la curva de la métrica IOU a partir de una predicción en formato multiclase con dos categorías.
     La predicción en formato multiclase (N,...) debe estar compuesta por dos categorías.
 
     Args:
@@ -501,7 +613,10 @@ def evaluate_model_auc(predictions, y, negative_preds = False):
         negative_preds (bool): indica cuál es la clase que se quiere evaluar (False: clase 1)
     
     Returns:
-        float: Métrica IOU
+        tuple: tupla con métrica AUC IOU y valores de umbrales e IOU:
+            - auc_score: Valor AUC IOU (float)
+            - thresholds: lista de umbrales (list)
+            - scores: lista de valores IOU (list)
     """
     # Vector de threshold (21 puntos)
     thresholds = np.linspace(0, 1, 21)
@@ -520,9 +635,8 @@ def evaluate_model_auc(predictions, y, negative_preds = False):
 
         y_hat = torch.where(predictions >= threshold, 1, 0)
 
-        tp, fp, fn, tn = smp.metrics.get_stats(y_hat, y, mode='binary')
-        score = smp.metrics.functional.iou_score(tp, fp, fn, tn).mean() # Cálculo de las estadísticas + IoU para el modelo
-        scores.append(score.cpu().item())
+        score = evaluate_model(y_hat, y, mode='binary')
+        scores.append(score)
 
     return auc(thresholds, scores), thresholds, scores
 
@@ -537,8 +651,8 @@ def show_loss_accuracy_evolution(history):
 
     ax1.set_xlabel('Epoch')
     ax1.set_ylabel(history['loss'])
-    ax1.plot(history['epoch'], history['train_loss'], label='Train Error')
-    ax1.plot(history['epoch'], history['val_loss'], label = 'Val Error')
+    ax1.plot(history['epoch'], history['train_loss'], label='Train Loss')
+    ax1.plot(history['epoch'], history['val_loss'], label = 'Val Loss')
     ax1.grid()
     ax1.legend()
 
@@ -552,6 +666,13 @@ def show_loss_accuracy_evolution(history):
     plt.show()
 
 def show_IOU_curve(thresholds, scores):
+    """
+    Función para graficar la evolución de la curva IOU
+
+    Args:
+        thresholds (list): lista de umbrales (float)
+        scores (list): valores IOU (float)
+    """
     fig, ax = plt.subplots(figsize=(6,6))
     ax.set_xlabel('Threshold')
     ax.set_ylabel('IOU')
@@ -559,4 +680,3 @@ def show_IOU_curve(thresholds, scores):
     ax.grid()
 
     plt.show()
-    

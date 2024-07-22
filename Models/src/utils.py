@@ -9,6 +9,8 @@ import satlaspretrain_models
 import segmentation_models_pytorch as smp
 import torchvision.transforms as transforms
 import random
+import os
+from pathlib import Path
 
 class Dataset(torch.utils.data.Dataset):
     """
@@ -695,14 +697,14 @@ class PredDatasetWithPrediction:
         device (device): Dispositivo de computación
     """
 
-    def __init__(self, image_dir, model, transform=None, device=None):
+    def __init__(self, image_dir, model, device=None):
         self.image_dir = Path(image_dir)
-        self.transform = transform if transform else transforms.ToTensor()
+        self.transform = transforms.ToTensor()
         self.model = model
         self.device = device if device else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model.to(self.device)
 
-    def predict_single_image(self, image_path, output_dir='results'):
+    def predict_single_image(self, image_path, output_dir='../results'):
         """
         Realiza una predicción sobre una sola imagen y guarda el resultado.
         Igual que la función 'predict' pero sin dataloader, directamente sobre RGB.
@@ -738,10 +740,11 @@ class PredDatasetWithPrediction:
 
     def _convert_to_image(self, tensor):
         """
-        Convierte un tensor de predicciones en una imagen.
+        Convierte tensor de predicciones en imagen
         """
         # Convertir el tensor a un numpy array y escalar los valores a 0-255
         tensor_np = tensor.numpy().astype(np.uint8)
 
         # Crear una imagen PIL a partir del array numpy
         return PIM.fromarray(tensor_np, mode='L')  # 'L' para imágenes en escala de grises
+    

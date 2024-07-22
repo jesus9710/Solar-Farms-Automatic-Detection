@@ -3,6 +3,7 @@ from PIL import Image
 import os
 import rasterio
 from rasterio.enums import Resampling
+import numpy as np
 
 # Vamos a transformar primero a Tif con las dimensiones del raster original
 
@@ -83,3 +84,26 @@ with rasterio.open(output_tif_path, 'w', **original_meta) as dst:
     dst.write(new_image, 1)  # Escribe la banda 1
 
 print(f"Imagen ajustada guardada en {output_tif_path}")
+
+#%% Vamos a transformar también a PNG y ajustar los colores para usar en la aplicación
+
+tif_path = 'spatial_data/output.tif'
+with rasterio.open(tif_path) as src:
+    band = src.read(1) # leer primera banda (única)
+
+# Crear una imagen en blanco con un canal alfa (RGBA)
+height, width = band.shape
+rgba_image = np.zeros((height, width, 4), dtype=np.uint8)
+
+# Asignar lcolores: 0 = transparencia; 1 = rojo
+rgba_image[band == 1] = [255, 0, 0, 255]  # Rojo con opacidad completa
+rgba_image[band == 0] = [0, 0, 0, 0]      # Transparente
+
+# Convertir numpy array en una imagen PIL
+png_image = Image.fromarray(rgba_image, 'RGBA')
+
+# Guardar la imagen PNG
+png_path = 'output.png'
+png_image.save(png_path)
+
+print(f"Imagen PNG guardada en {png_path}")

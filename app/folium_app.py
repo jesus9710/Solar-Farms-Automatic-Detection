@@ -1,33 +1,48 @@
 #%%
 import geopandas as gpd
+from pyproj import Transformer
 import folium
 import rasterio
 from folium.raster_layers import ImageOverlay
 from matplotlib import cm
 import numpy as np
-
-#%%
-# Cargar archivos vectoriales
-shp1 = gpd.read_file('spatial_data/Es_Lic_SCI_Zepa_SPA_Medalpatl_202401.shp')
-shp2 = gpd.read_file('spatial_data/FV_sensibilidad_vector.shp')
-geojson = gpd.read_file('spatial_data/Badajoz.geojson')
-
-# %%
-import folium
 from folium import IFrame
 from folium.plugins import Geocoder
 
-# Coordenadas centrales aproximadas (ajústalas según sea necesario)
-center_lat, center_lon = 39.4702, -6.3722
+# Ruta al Tif y al PNG
+# PNG para visualizar y Tif para establecer límites
+tif_file = 'spatial_data/output.tif'
+png_file = 'spatial_data/output.png'
+
+with rasterio.open(tif_file) as src:
+    bounds = src.bounds
+    crs = src.crs
+
+# Transformador a EPSG:4326 (porque los mapas de Folium se basan en ese CRS)
+transformer = Transformer.from_crs(crs, 'EPSG:4326', always_xy=True)
+
+# Transformar los límites
+left, bottom = transformer.transform(bounds.left, bounds.bottom)
+right, top = transformer.transform(bounds.right, bounds.top)
+
+# Crear el mapa base centrado en la ubicación del raster
+m = folium.Map(location=[(bottom + top) / 2, (left + right) / 2], zoom_start=10)
+
+# Definir los límites geográficos de la imagen PNG
+image_bounds = [[bottom, left], [top, right]]
+
+# Añadir imagen de predicciones del modelo al mapa base
+overlay = ImageOverlay(name='Paneles solares (IA)',
+                       image=png_file,
+                       bounds=image_bounds,
+                       opacity=1)
+overlay.add_to(m)
 
 # URL del WMS
 wms_url = "https://wms.mapama.gob.es/sig/Biodiversidad/RedNatura/wms.aspx"
 
 # URL de la leyenda
 legend_url = "https://wms.mapama.gob.es/sig/Biodiversidad/RedNatura/Leyenda/RedNatura.png"
-
-# Crear el mapa
-m = folium.Map(location=[center_lat, center_lon], zoom_start=12)
 
 # Añadir capa de OpenStreetMap (callejero)
 folium.TileLayer('openstreetmap').add_to(m)
@@ -99,7 +114,7 @@ Geocoder().add_to(m)
 folium.LayerControl().add_to(m)
 
 # Guardar el mapa en un archivo HTML
-m.save('mapa_wms_leyenda2.html')
+m.save('app_valoracion_fotovoltaicas.html')
 
 m
 

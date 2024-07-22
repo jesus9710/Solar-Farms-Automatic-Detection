@@ -162,6 +162,5 @@ cython_debug/
 # Sentinel API
 **/creds.txt
 *.tiff
-*.tif
+SIOSE AR/merging and uses extraction.ipynb
 *.png
-*.pth

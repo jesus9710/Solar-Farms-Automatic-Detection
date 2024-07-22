@@ -1,6 +1,6 @@
 #%% Librerías
 
-from utils import show_splitter, get_sh_request_from_split, get_product_path, merge_products
+from utils import plot_image, show_splitter, get_sh_request_from_split, get_product_path, merge_products
 from sentinelhub import SentinelHubRequest, SentinelHubCatalog, SentinelHubDownloadClient, DataCollection, SHConfig, MimeType, MosaickingOrder, geometry, BBoxSplitter
 import geopandas as gpd
 from shapely.geometry import box
@@ -95,6 +95,26 @@ sh_requests, dl_requests = get_sh_request_from_split(bbox_split,
                                                     resolution=resolution,
                                                     config=config)
 
+'''
+evalscript=evalscript,
+        input_data=input_data,
+        responses=responses,
+        bbox=bbox,
+        resolution=resolution,
+        data_folder=tempfile.gettempdir(),
+        config=config,
+'''
+#%% Obtener un preview
+
+get_preview = False
+
+if get_preview:
+    data_full_color = []
+    for request in sh_requests:
+        data_full_color.append(request.get_data()[0])
+    for image in data_full_color:
+        plot_image(image, factor=3.5 / 255, clip_range=(0, 1))
+
 #%% Descarga
 
 data_full_color = SentinelHubDownloadClient(config=config).download(dl_requests, max_threads=None)
@@ -107,3 +127,8 @@ save_file = True # Flag de seguridad para evitar sobreescribir imágenes
 if save_file:
     tiffs = get_product_path(sh_requests)
     merge_products(tiffs, file_name)
+
+#%% Plotting
+
+
+# %%

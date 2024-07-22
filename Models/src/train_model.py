@@ -7,7 +7,7 @@ from utils import * # Todas las funciones y variables del módulo utils
 
 IMAGE_DIR = Path.cwd().parent.joinpath('data/features')
 MASK_DIR = Path.cwd().parent.joinpath('data/labels') # Directorio de imágenes (features) y máscaras (labels)
-MODEL_DIR = Path.cwd().parent.joinpath('models') # Directorio de modelos
+MODEL_DIR = Path.cwd().parent.joinpath('models/GDLv/Aerial Swin Base') # Directorio de modelos
 
 # %% Gestor de pesos y dispositivo de cómputo
 
@@ -19,16 +19,16 @@ device = torch.device(device_str)  # Dispositivo de cómputo: GPU si está dispo
 load_model = True # Variable para determinar si se cargan los pesos del modelo preentrenado 
 
 if load_model: # Si se cargan los pesos:
-    backcone_path = MODEL_DIR / 'BB_ASw_GDLv.pth'
+    backbone_path = MODEL_DIR / 'BB_ASw_GDLv.pth'
     upsample_path = MODEL_DIR / 'UP_ASw_GDLv.pth'
     head_path = MODEL_DIR / 'HE_ASw_GDLv.pth'
 else: # Si no se cargan los pesos:
-    backcone_path = None
+    backbone_path = None
     upsample_path = None
     head_path = None
 
 model = Segmentation_model(model_identifier = "Aerial_SwinB_SI", # Inicialización del modelo de segmentación
-                           backbone_path=backcone_path, # Pesos del backbone
+                           backbone_path=backbone_path, # Pesos del backbone
                            upsample_path=upsample_path, # Pesos de upsampling
                            head_path=head_path, # Pesos de la cabecera del modelo
                            num_categories = 2, # Número de categorías de segmentación
@@ -150,3 +150,18 @@ if save_model:
     torch.save(backbone_state_dict, MODEL_DIR / backcone_fname)
     torch.save(upsample_state_dict, MODEL_DIR / upsample_fname)
     torch.save(head_state_dict, MODEL_DIR / head_fname)
+    
+#%% Predicción sobre imágenes nuevas (Badajoz, Junio 2024) sin labels
+
+def main():
+    
+    data_dir = 'data/predict' # Directorio que contiene las imágenes
+    img_paths = [str(path) for path in Path.cwd().parent.joinpath(data_dir).glob('*.png')] # Lista de rutas completas de las imágenes en el directorio
+
+    prediction = PredDatasetWithPrediction(image_dir=data_dir, model=model) # Crear una instancia de la clase, pasando el directorio de imágenes y el modelo
+
+    for img_path in img_paths: # Iterar sobre la lista de imágenes y realizar la predicción usando la instancia
+        prediction.predict_single_image(img_path, output_dir='../results')
+
+if __name__ == "__main__":
+    main()

@@ -9,6 +9,8 @@ import satlaspretrain_models
 import segmentation_models_pytorch as smp
 import torchvision.transforms as transforms
 import random
+import os
+from pathlib import Path
 
 class Dataset(torch.utils.data.Dataset):
     """
@@ -164,10 +166,12 @@ class Segmentation_model(nn.Module):
         out_backbone = self.backbone(x) # Envío de las imágenes a través del 'backbone' del modelo para extraer características de bajo y alto nivel 
         out_fpn = self.fpn(out_backbone)  # Envío de las características extraídas por el 'backbone' a través de la FPN (Feature Pyramid Network) para generar mapas de características de múltiples escalas
         out_upsample = self.upsample(out_fpn) # Envío de los mapas de características generados por la FPN a través de la capa de 'upsample' para aumentar la resolución espacial de los mapas de características
-        outputs, loss = self.head(0, out_upsample, y)  # Envío de los mapas de características de alta resolución a través de la 'head' del modelo para obtener las predicciones finales y calcula la pérdida comparando las predicciones con las máscaras reales
+        outputs, _ = self.head(0, out_upsample, y)  # Envío de los mapas de características de alta resolución a través de la 'head' del modelo para obtener las predicciones finales y calcula la pérdida comparando las predicciones con las máscaras reales
         
-        if self.criterion and y:
+        if y is not None and self.criterion:
             loss = self.criterion(outputs, y)
+        else:
+            loss = None
 
         return outputs, loss
     
@@ -680,3 +684,67 @@ def show_IOU_curve(thresholds, scores):
     ax.grid()
 
     plt.show()
+    
+class PredDatasetWithPrediction:
+    """
+    Cargar imágenes RGB una a una desde path, transformar a tensor, predecir sin labels, 
+    y guardar en carpeta 'results'. De esta forma liberamos RAM.
+
+    Atributos:
+        image_dir (Path): Directorio de imágenes RGB
+        transform (transform): Transformación de torchvisión
+        model (nn.Module): Modelo de predicción
+        device (device): Dispositivo de computación
+    """
+
+    def __init__(self, image_dir, model, device=None):
+        self.image_dir = Path(image_dir)
+        self.transform = transforms.ToTensor()
+        self.model = model
+        self.device = device if device else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.model.to(self.device)
+
+    def predict_single_image(self, image_path, output_dir='../results'):
+        """
+        Realiza una predicción sobre una sola imagen y guarda el resultado.
+        Igual que la función 'predict' pero sin dataloader, directamente sobre RGB.
+        """
+        self.model.eval()
+
+        image = PIM.open(image_path).convert("RGB")
+
+        if self.transform:
+            image_tensor = self.transform(image).unsqueeze(0).to(self.device).float()
+        else:
+            raise ValueError("Transformation not defined")
+
+        with torch.no_grad():
+            outputs, _ = self.model(image_tensor)
+            soft_preds = outputs.squeeze(0) 
+            y_hat = torch.argmax(soft_preds, dim=0)
+            y_hat_image = self._convert_to_image(y_hat.cpu())
+
+        # Crear directorio de salida si no existe
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        # Extraer el nombre del archivo de entrada para generar el nombre de salida
+        base_name = Path(image_path).name
+        pred_image_path = output_path / f'pred_{base_name}'
+
+        # Guardar
+        y_hat_image.save(pred_image_path)
+        print(f'Predicción guardada en: {pred_image_path}')
+
+        return pred_image_path  # Devolver la ruta
+
+    def _convert_to_image(self, tensor):
+        """
+        Convierte tensor de predicciones en imagen
+        """
+        # Convertir el tensor a un numpy array y escalar los valores a 0-255
+        tensor_np = tensor.numpy().astype(np.uint8)
+
+        # Crear una imagen PIL a partir del array numpy
+        return PIM.fromarray(tensor_np, mode='L')  # 'L' para imágenes en escala de grises
+    

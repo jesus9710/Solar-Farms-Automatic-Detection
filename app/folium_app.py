@@ -29,7 +29,8 @@ right, top = transformer.transform(bounds.right, bounds.top)
 m = folium.Map(location=[(bottom + top) / 2, (left + right) / 2], zoom_start=10)
 
 # Definir los límites geográficos de la imagen PNG
-image_bounds = [[bottom, left], [top, right]]
+image_bounds = [[bottom-0.0125, left-0.03], [top-0.0125, right-0.03]]
+# También ajustamos ligeramente los márgenes porque el posicionamiento no es del todo correcto
 
 # Añadir imagen de predicciones del modelo al mapa base
 overlay = ImageOverlay(name='Paneles solares (IA)',

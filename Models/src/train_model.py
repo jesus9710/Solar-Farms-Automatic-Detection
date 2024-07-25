@@ -109,14 +109,14 @@ base_preds = (torch.ones(*soft_preds.shape)).long().to(device) # Baseline (todos
 base_score, _, _ = evaluate_model_auc(base_preds, target)
 train_score, _, _ = evaluate_model_auc(soft_preds_train, target_train)
 val_score, _, _ = evaluate_model_auc(soft_preds_val, target_val)
-score, thresholds, iou_socres = evaluate_model_auc(soft_preds, target)
+score, thresholds, iou_scores = evaluate_model_auc(soft_preds, target)
 
 print(f'BaseLine score: {base_score}')
 print(f'model score (train): {train_score}')
 print(f'model score (val): {val_score}')
 print(f'model score (test): {score}')
 
-show_IOU_curve(thresholds, iou_socres)
+show_IOU_curve(thresholds, iou_scores)
 
 # %% Visualización aleatoria de resultados
 

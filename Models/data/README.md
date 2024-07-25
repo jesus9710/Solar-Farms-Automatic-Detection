@@ -11,8 +11,9 @@ Este directorio debe contener los datos necesarios para el entrenamiento del mod
 
 Para obtener los datos, sigue los siguientes pasos:
 
-1. Descarga los datasets desde [Google Drive](https://drive.google.com/drive/folders/1nM__BWtlnpvLtXnUxWZsGzd9YgSRcmtZ?usp=drive_link).
-2. Coloca las carpetas features y labels dentro de `datos/`.
+1. Descarga los datos [Features](https://drive.google.com/file/d/1XwuDdKKrxuzUo-A05eeRnRn9_TYTz9EW/view?usp=drive_link) y [Lables](https://drive.google.com/file/d/1qRVUgqZo6zjyk2AxYgRaOLA7ya37OPPo/view?usp=drive_link).
+
+3. Coloca las carpetas features y labels dentro de `datos/`.
 
 Obtener los datos mediante script:
 

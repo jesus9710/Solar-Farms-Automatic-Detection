@@ -13,6 +13,7 @@ El proyecto se estructura en tres componentes principales: API Sentinel 2, SIOSE
 1. `API Sentinel 2`: descarga y preprocesamiento de datos satelitales de Sentinel 2.
 2. `SIOSE AR`: análisis y procesamiento de datos satelitales para la obtencion de máscaras multiclase.
 3. `Models`: creación y entrenamiento de la red neuronal de segmentación
+4. `app`: construcción de la aplicación final.
 
 ## Requisitos
 

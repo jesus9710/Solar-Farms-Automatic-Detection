@@ -10,7 +10,7 @@ config = SHConfig("myprofile")
 
 #%% Geometría
 
-adm_lim_badajoz_raw = gpd.read_file('../../data/Badajoz.geojson').to_crs(epsg=32629)
+adm_lim_badajoz_raw = gpd.read_file('../../data/bbox_Badajoz.geojson').to_crs(epsg=32629)
 adm_lim_badajoz = geometry.Geometry(adm_lim_badajoz_raw.geometry[0],adm_lim_badajoz_raw.crs)
 
 #%% Parámetros

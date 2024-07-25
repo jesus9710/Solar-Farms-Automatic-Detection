@@ -16,9 +16,7 @@ El proyecto se estructura en tres componentes principales: API Sentinel 2, SIOSE
 
 ## Requisitos
 
-	@@ -32,8 +34,9 @@ Para ejecutar este proyecto, se necesita tener instalados los siguientes paquete
-
-Se pueden instalar estos paquetes utilizando el archivo 'requirements.txt' proporcionado.
+Las librerías están disponibles en `requirements.txt`.
 
 ```powershell
 pip install -r requirements.txt

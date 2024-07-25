@@ -1,7 +1,7 @@
 # Aplicación Final
 
 ## Descripción
-Este repositorio contiene una aplicación de mapa interactivo generado con la librería Folium. El mapa incluye cinco capas espaciales:
+Aplicación de mapa interactivo, incluye cinco capas espaciales:
 
 1. **Base de OpenStreetMaps**
 2. **Imágenes satélite de Google Satellite**
